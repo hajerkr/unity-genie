@@ -6,10 +6,6 @@ import flywheel
 
 dotenv.load_dotenv()
 
-def get_env_from_zshrc(var_name):
-    command = f"source ~/.zshrc && echo ${var_name}"
-    result = subprocess.run(['zsh', '-c', command], stdout=subprocess.PIPE, text=True)
-    return result.stdout.strip()
 
 def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     """
@@ -24,7 +20,7 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
 
 
     df = pd.concat(df, axis=0, ignore_index=True)
-    outdir = os.path.join("/Users/Hajer/unity/WorkflowApp/data", out_csv)
+    outdir = os.path.join("../data", out_csv)
     df.to_csv(outdir)
     df.to_csv(out_csv, index=False)
     return df
@@ -32,7 +28,7 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
 # ---- Streamlit App ----
 # set the page layout to wide
 st.set_page_config(layout="wide")
-st.logo("/Users/Hajer/unity/WorkflowApp/docs/logo.jpg", size='large')
+st.logo("../docs/logo.jpg", size='large')
 st.title(":streamlit: UNITY Derivative Downloader")
 st.write("Download and compile derivatives from multiple projects into a single CSV file.")
 st.write("Select the projects and derivative types from the sidebar :point_left:, then click 'Fetch derivatives'.")
@@ -40,7 +36,7 @@ st.write("Select the projects and derivative types from the sidebar :point_left:
 # Sidebar inputs
 st.sidebar.header("Settings")
 #Project IDs is a list generated using fw.projects() by getting the project label
-api_key = get_env_from_zshrc('FW_CLI_API_KEY')
+api_key = os.getenv('FW_CLI_API_KEY')
 fw = flywheel.Client(api_key=api_key)
 projects = [proj.label for proj in fw.projects()]
 # Dropdown for project selection (can select multiple)

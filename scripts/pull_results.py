@@ -18,57 +18,7 @@ Specify the keyword (to look for in the file of interest), project name, gear, a
 
 """
 
-# get the start time
-# st = time.time()
-
-# Source zshrc and get the env var you want
-def get_env_from_zshrc(var_name):
-    command = f"source ~/.zshrc && echo ${var_name}"
-    result = subprocess.run(['zsh', '-c', command], stdout=subprocess.PIPE, text=True)
-    return result.stdout.strip()
-
-
-# group_name = "global_map" 
-# group = fw.lookup(group_name)
-
-# # Extract gear and gear version from cmd arguments
-# parser = argparse.ArgumentParser(prog='pull FW results')
-# parser.add_argument('--gear','-gear', nargs='?', help='gear name')
-# parser.add_argument('--gearV', '-gearV',nargs='?', help='gear version')
-# parser.add_argument('--project', '-project', nargs='?', help='project name')
-# parser.add_argument('--keyword', '-keyword', nargs='?', help='keyword in filename')
-
-
-# args = parser.parse_args()
-
-# # Filters
-# gear = (str(args.gear)).strip() # recode this as variable that user selects in config
-# gearVersion = (str(args.gearV)).strip()
-# project_title = (str(args.project)).strip()
-# keyword = (str(args.keyword)).strip()
-
-#timestampFilter = datetime(2025, 6, 10, 0, 0, 0, 0, pytz.UTC) # Date before which we want to filter analyses (i.e. only get analyses run after this date)
-#lst = ['Botswana-MOTHEO-Pilot'] #['Ethiopia (ENAT)', 'Ethiopia-BCD-Hyperfine']
-#  
-
-
-# print(f'Project {project_title}')
-# # Get all projects in each group
-# projects = fw.projects()
-# # Loop over all projects
-# for project in projects:   
-#     if project.label == project_title:
-#         print(f"Processing: {project.label}")
-#         download_derivatives(project_id, derivative_type)
-        
-
-
-
-# # get the end time
-# et = time.time()
-# # get the execution time
-# elapsed_time = et - st
-# print('Execution time:', elapsed_time, 'seconds')
+dotenv.load_dotenv()
 
 def download_derivatives(project_id, gear, gear_versions, keywords, timestampFilter):
     """
@@ -80,7 +30,7 @@ def download_derivatives(project_id, gear, gear_versions, keywords, timestampFil
     - outdir: Path to the compiled CSV file containing results.
     """
 
-    api_key = get_env_from_zshrc('FW_CLI_API_KEY')
+    api_key = os.getenv('FW_CLI_API_KEY')
     # Connect to your Flywheel instance
     if timestampFilter is None:
         timestampFilter = datetime(2020, 1, 1, 0, 0, 0, 0, pytz.UTC)
@@ -92,7 +42,7 @@ def download_derivatives(project_id, gear, gear_versions, keywords, timestampFil
     st.info(f"Project: {project_id} Subjects n = {len(project.subjects())}\nSessions n = {len(project.sessions())}...")
 
     # Create a work directory in our local "home" directory
-    work_dir = Path(Path.home()/'unity/WorkflowApp/data/', platform='auto')
+    work_dir = Path(Path.home()/'../data/', platform='auto')
     # If it doesn't exist, create it
     if not work_dir.exists():
         work_dir.mkdir(parents = True)
