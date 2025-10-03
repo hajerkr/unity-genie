@@ -1,0 +1,16 @@
+#environment variables
+.env
+
+#data
+data
+
+#logs
+*.out
+*.log
+
+#python
+__pycache__
+__init__.py
+*.pyc
+
+
