@@ -1,3 +1,4 @@
+moviepy
 pandas
 streamlit
 flywheel
