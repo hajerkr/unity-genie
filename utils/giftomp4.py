@@ -1,11 +1,10 @@
-import moviepy
 import moviepy.editor as mp
 import os
 import sys
 
 def convert_gif_to_mp4(gif_path):
 
-    clip = mp.VideoFileClip((f))
+    clip = mp.VideoFileClip((gif_path))
     video_path = os.path.splitext(f)[0]+'.mp4'
     clip.write_videofile(video_path)
     

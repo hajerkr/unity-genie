@@ -48,11 +48,11 @@ import moviepy.editor as mp
 
 def convert_gif_to_mp4(gif_path):
 
-    clip = mp.VideoFileClip((f))
-    video_path = os.path.splitext(f)[0]+'.mp4'
+    clip = mp.VideoFileClip((gif_path))
+    video_path = os.path.splitext(gif_path)[0]+'.mp4'
     clip.write_videofile(video_path)
     
-    print(f"Converted {f} to {video_path}")
+    print(f"Converted {gif_path} to {video_path}")
     return video_path
 
 def preprocess_nifti(nifti_path, target_height=300):
@@ -176,6 +176,8 @@ def nifti_overlay_gif_3planes(native_path, seg_path,
     out_mp4 = convert_gif_to_mp4(out_gif)
     print(f"✅ Saved MP4 to {out_mp4}")
 
+    return out_mp4
+
 
 def download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir):
     download_dir = Path(f'{download_dir}/{sub_label}/{ses_label}/')
@@ -200,7 +202,7 @@ def download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir):
                 print('Downloaded parcellation ',download_path)
                 
 
-def get_data(sub_label, ses_label, seg_gear, input_gear, v,download_dir,project_label,api_key):
+def get_data(sub_label, ses_label, asys, seg_gear, input_gear, v,download_dir,project,api_key):
     
     from fw_client import FWClient
     #api_key = os.environ.get('FW_CLI_API_KEY')
@@ -230,38 +232,44 @@ def get_data(sub_label, ses_label, seg_gear, input_gear, v,download_dir,project_
         print('No analysis containers')
     else:
         try:
-            if input_gear.startswith("gambas"):
+            
+            #Get the asys by id
+            if asys is not None:
+                asys = fw.get_analysis(asys)
+                download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
+
+            elif input_gear.startswith("gambas"):
                 seg_gear = seg_gear + "_gambas"
                 print("Looking for anaylyses from ", seg_gear)
-
-            matches = [asys for asys in analyses if asys.label.startswith(seg_gear) and asys.job.get('state') == "complete"]
-            print("Matches: ", len(matches),[asys.label for asys in matches] )
-            # If there are no matches, the gear didn't run
-            if len(matches) == 0:
-                run = 'False'
-                status = 'NA'
-                print(f"Did not find any matched, {seg_gear} did not run.")
-            # If there is one match, that's our target
-            elif len(matches) == 1:
-                run = 'True'
-                #status = matches[0].job.get('state')
-                #print(status)
-                #print("Inputs ", matches[0])
-                asys=matches[0]
-                download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
-
-
             else:
-                last_run_date = max([asys.created for asys in matches])
-                last_run_analysis = [asys for asys in matches if asys.created == last_run_date and asys.job.get('state') == "complete"]
+                matches = [asys for asys in analyses if asys.label.startswith(seg_gear) and asys.job.get('state') == "complete"]
+                print("Matches: ", len(matches),[asys.label for asys in matches] )
+                # If there are no matches, the gear didn't run
+                if len(matches) == 0 and asys is None:
+                    run = 'False'
+                    status = 'NA'
+                    print(f"Did not find any matched, {seg_gear} did not run.")
+                # If there is one match, that's our target
+                elif len(matches) == 1:
+                    run = 'True'
+                    #status = matches[0].job.get('state')
+                    #print(status)
+                    #print("Inputs ", matches[0])
+                    asys=matches[0]
+                    download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
 
-                # There should only be one exact match
-                last_run_analysis = last_run_analysis[0]
 
-                run = 'True'
-                #status = last_run_analysis.job.get('state')
-                asys=last_run_analysis
-                download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
+                else:
+                    last_run_date = max([asys.created for asys in matches])
+                    last_run_analysis = [asys for asys in matches if asys.created == last_run_date and asys.job.get('state') == "complete"]
+
+                    # There should only be one exact match
+                    last_run_analysis = last_run_analysis[0]
+
+                    run = 'True'
+                    #status = last_run_analysis.job.get('state')
+                    asys=last_run_analysis
+                    download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
 
         except Exception as e:
             print(f"Exception caught for {sub_label} {ses_label}: ", e)
@@ -338,9 +346,121 @@ def find_csv_file(directory, username):
     return None  # No matching file found
 
 
-import streamlit as st
+def qc_subject(row, segmentation_tool, metrics):
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    input_gear, gear_v = None, None #row["input_gear_v"].split("/")[0], row["input_gear_v"].split("/")[1]
+    sub_label, ses_label = row["subject"],row["session"]
+    asys = row.get("analysis_id", None)
+    project_label = row["project"].strip()
+    print(project_label)
 
-today = datetime.now()
+    project = fw.projects.find_first(f'label={project_label}')
+    project = project.reload()
+    
+    download_dir = os.path.join(Path(__file__).parent,"..","data")
+    with st.spinner("Downloading data..."):
+        st.write('Data will be temporarily downloaded to the local machine.')
+        get_data(sub_label, ses_label, asys, segmentation_tool, input_gear, gear_v, download_dir, project, API_KEY)
+    #Create the output video
+    segmentation_path , native_scan_path = None, None
+    files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
+
+    for file in files:
+        print(file)
+        if file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz'):
+            segmentation_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+        if file.endswith('synthSR.nii.gz'):
+            print("Found synthSR")
+            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+            #As soon as we find segmentation and native scan, we can stop    
+        elif file.endswith('.nii.gz') and not file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz') and st.session_state.segmentation_tool != "recon-all-clinical":   
+            
+            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+
+    if segmentation_path is None or native_scan_path is None:
+        st.error(f"Missing files for {sub_label} {ses_label}. Skipping...")
+        return
+
+    print("NATIVE SCAN AND SEGMENTATION SCAN: ", native_scan_path, segmentation_path)
+    out_mp4 = nifti_overlay_gif_3planes(native_scan_path, segmentation_path,
+        out_gif=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.gif",
+        out_mp4=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4",
+        target_height=200, alpha=0.4, cmap="viridis",
+        fps=5, layout="horizontal")
+    
+    #When the video is ready, delete the local nifti files to save space
+    os.remove(native_scan_path)
+    os.remove(segmentation_path)
+    st.write(f"### Subject: {sub_label} Session: {ses_label}")
+
+    st.session_state.responses = [st.session_state.username, timestamp, project_label, sub_label, ses_label] 
+    
+    st.session_state.df_outliers.drop(columns=['is_outlier'])
+    filtered_cols = [col for col in st.session_state.df_outliers.columns if (
+                                            (col.endswith("_zscore") or col.endswith("_cov"))
+                                            and not col.startswith("n_roi_outliers")
+                                        )]
+    # 2. From those, keep only columns where the value is 1
+    outlier_rois = [col for col in filtered_cols if row[col] == 1]
+    #Get rid of the suffix in the names (mm_ and ra_)
+    outlier_rois = [re.sub(r'^(mm_|ra_)', '', col) for col in outlier_rois]
+
+    # print("Outlier regions for this subject (using z score and cov):")
+    # print(f"{set(outlier_rois)}")
+    outliers = list(set(outlier_rois))
+
+    #Display the video
+    st.video(out_mp4)
+    st.write ('⚠️ Regions with outlier metrics for this subject (using z score and cov):')
+    st.write(f"{outliers}")
+
+   
+    with st.form("qc_form", clear_on_submit=True):
+        print(st.session_state.responses)
+        # --- Display all questions harcoded ---
+        st.write("Answer the questions below:")
+        metric1 = "Are the main brain structures correctly segmented (e.g., gray/white matter, ventricles)? (Y/N)"
+        response1 = st.radio(f"**Q1: {metric1}**", ["Yes", "No"], key="q_0")
+        st.session_state.responses.append(response1)
+        metric2 = "Are there any major errors or artifacts? (No/Minor/Major)"
+        response2 = st.radio(f"**Q2: {metric2}**", ["No", "Minor", "Major"], key="q_1")
+        st.session_state.responses.append(response2)
+        metric3 = "Overall segmentation quality (Good/Poor)"
+        response3 = st.radio(f"**Q3: {metric3}**", ["Good", "Poor"], key="q_2")
+        st.session_state.responses.append(response3)
+        metric4 = "Include in analysis? (Y/N)"
+        response4 = st.radio(f"**Q4: {metric4}**", ["Yes", "No"], key="q_3")
+        st.session_state.responses.append(response4)
+        metric5 = "Comments"
+        response5 = st.text_input(f"**Q5: {metric5}**", key="q_4")
+        st.session_state.responses.append(response5)
+
+    
+
+        submitted = st.form_submit_button('Save/Next subject')
+
+        if submitted:
+            # st.session_state.responses  = responses
+            st.success("All questions answered! ✅")
+            ratings_file = os.path.join(download_dir, f'Parcellation_QC_{st.session_state.username.replace(" ","_")}.csv')
+            save_rating(ratings_file, st.session_state.responses, project, metrics)
+            # Advance to next row and refresh UI without losing state
+            if "row" not in st.session_state:
+                st.session_state.row = 0
+            
+
+            current = st.session_state.row == len(st.session_state.df_outliers.index) - 1
+            print('Current index', st.session_state.row, current, len(st.session_state.df_outliers.index))
+            if current:
+                #Check if the file exists
+                #Show an alert 
+
+                st.success(f"You have completed the QC for all subjects! 🎉 Data were saved under {os.path.join(download_dir, f'Parcellation_QC_{st.session_state.username.replace(" ","_")}.csv')}")
+                st.balloons()
+                st.stop() 
+            else:
+                st.session_state.row = min(st.session_state.row + 1, len(st.session_state.df_outliers.index) - 1)
+                st.rerun()
 
 # Now you can access them like this:
 API_KEY = os.getenv("FW_CLI_API_KEY")
@@ -361,20 +481,21 @@ segmentation_tool = st.radio("Segmentation source:", ["recon-all-clinical", "min
 segmentation_suffix = {"minimorph":"segmentation","recon-all-clinical":"aparc+aseg"}
 
 #Ask for input: username
-username = st.text_input("Enter your name or initials:")
-if username:
-    st.success(f"Hello, {username}! You can proceed with the QC.")
+st.session_state.username = st.text_input("Enter your name or initials:")
+if st.session_state.username:
+    st.success(f"Hello, {st.session_state.username}! You can proceed with the QC.")
 
-df_outliers = None
+st.session_state.df_outliers = None
 if uploaded_outliers is not None:
-    df_outliers = pd.read_csv(uploaded_outliers)
-    st.write("Outliers DataFrame:")
-    st.dataframe(df_outliers)
+    st.session_state.df_outliers = pd.read_csv(uploaded_outliers)
+    st.write(f"Outliers DataFrame: {st.session_state.df_outliers.shape[0]} rows and {st.session_state.df_outliers.shape[1]} columns")
+    st.dataframe(st.session_state.df_outliers)
 
-if st.button("Start QC") and segmentation_tool and uploaded_outliers is not None and username:
+if segmentation_tool and uploaded_outliers is not None and st.session_state.username: #st.button("Start QC") and 
+    st.session_state.segmentation_tool = segmentation_tool
     st.write("Starting QC process...")
     st.write('Instructions: Review the video below and provide your feedback. You can rate the segmentation quality and add comments as needed.')
-    st.write('###1. Getting the data: Data will be temporarily downloaded to the local machine.')
+    
     
 
     metrics =["Are the main brain structures correctly segmented (e.g., gray/white matter, ventricles)? (Y/N)",
@@ -382,97 +503,54 @@ if st.button("Start QC") and segmentation_tool and uploaded_outliers is not None
           "Overall segmentation quality (Good/Poor)", "Include in analysis? (Y/N)",
           "Comments"]
     
-    for _, row in df_outliers.iterrows():
-        input_gear, gear_v = row["input_gear_v"].split("/")[0], row["input_gear_v"].split("/")[1]
-        sub_label, ses_label = row["subject"],row["session"]
-        project_label = row["project"].strip()
-        print(project_label)
 
-        project = fw.projects.find_first(f'label={project_label}')
-        project = project.reload()
-        
-        download_dir = os.path.join(Path(__file__).parent,"..","data")
-        get_data(sub_label, ses_label, segmentation_tool,input_gear, gear_v,download_dir, project, API_KEY)
-        #Create the output video
-        segmentation_path , native_scan_path = None, None
-        files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
+    if "row" not in st.session_state:
+        print('Initializing row index...')
+        st.session_state.row = 0
 
-        for file in files:
-            if file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz'):
-                segmentation_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
-            else:
-                native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+    def next_row():
+        st.session_state.row += 1
 
-        if segmentation_path is None or native_scan_path is None:
-            st.error(f"Missing files for {sub_label} {ses_label}. Skipping...")
-            continue
+    def prev_row():
+        st.session_state.row -= 1
 
+    # col1, col2, _, _ = st.columns([0.1, 0.17, 0.1, 0.63])
 
-        nifti_overlay_gif_3planes(native_scan_path, segmentation_path,
-            out_gif=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.gif",
-            out_mp4=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4",
-            target_height=200, alpha=0.4, cmap="viridis",
-            fps=5, layout="horizontal")
-        
-        #When the video is ready, delete the local nifti files to save space
-        os.remove(native_scan_path)
-        os.remove(segmentation_path)
-        st.write(f"### Subject: {sub_label} Session: {ses_label}")
+    # if st.session_state.row < len(st.session_state.df_outliers.index)-1:
+    #     col2.button(">", on_click=next_row)
+    # else:
+    #     col2.write("") 
 
-        #Display the video
-        st.video(out_mp4)
-        st.write("Answer the questions below:")
+    # if st.session_state.row > 0:
+    #     col1.button("<", on_click=prev_row)
+    # else:
+    #     col1.write("") 
+    
+    current_row = st.session_state.df_outliers.iloc[st.session_state.row]
+    print('Current row', current_row)
+    # st.write(current_row)
+    #Make sure to stop when we reach the last row
+    
+    qc_subject(current_row, segmentation_tool, metrics)
+    
+    
+    # if "current_subject_index" not in st.session_state:
+    #     st.session_state["current_subject_index"] = 0
 
-        for metric in metrics[:-1]:
-            response = ""
-            #Provide a few buttons for each option
-            if "Y/N" in metric:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"Y - {metric}", key=f"{sub_label}_{ses_label}_{metric}_Y"):
-                        response = "Y"
-                with col2:
-                    if st.button(f"N - {metric}", key=f"{sub_label}_{ses_label}_{metric}_N"):
-                        response = "N"
-            elif "No/Minor/Major" in metric:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button(f"No - {metric}", key=f"{sub_label}_{ses_label}_{metric}_No"):
-                        response = "No"
-                with col2:
-                    if st.button(f"Minor - {metric}", key=f"{sub_label}_{ses_label}_{metric}_Minor"):
-                        response = "Minor"
-                with col3:
-                    if st.button(f"Major - {metric}", key=f"{sub_label}_{ses_label}_{metric}_Major"):
-                        response = "Major"
-            elif "Good/Poor" in metric:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"Good - {metric}", key=f"{sub_label}_{ses_label}_{metric}_Good"):
-                        response = "Good"
-                with col2:
-                    if st.button(f"Poor - {metric}", key=f"{sub_label}_{ses_label}_{metric}_Poor"):
-                        response = "Poor"
+    
+    # if st.session_state["current_subject_index"] != len(st.session_state.df_outliers):
+    #     subject = subjects[st.session_state["current_subject_index"]]
+    # qc_subject(st.session_state.df_outliers.iloc[st.session_state["current_subject_index"]])
 
-            # Store responses for paired image set
-            responses.append(response.upper())
-
-        # Have user input any comments to elaborate on artefact presence
-        #Comment section with user input
-        comments = st.text_input(f"{metrics[-1]}: ")
-        responses.append(comments)
-        # responses.append(timestamp)
-
-        print(responses)
-        ratings_file = os.path.join(download_dir,f'Parcellation_QC_{username.replace(" ","")}.csv')
-        save_rating(ratings_file,responses,project,metrics)
-
-        # if i < len(metrics) - 2:  # Only ask if not the last metric
-        #Have a prompt to continue or exit
-        if st.button("Continue to next subject"):
-            st.write("Continuing to next subject...")
-            clear_output(wait=True)
-            continue
-        else:
-            st.write("QC process paused. You can resume later.")
-            break
+    # for _, row in st.session_state.df_outliers.iterrows():
+    #     content_placeholder = st.empty()
+    #     qc_subject(row)
+    #     # if i < len(metrics) - 2:  # Only ask if not the last metric
+    #     #Have a prompt to continue or exit
+    #     if st.button("Continue to next subject"):
+    #         st.write("Continuing to next subject...")
+    #         clear_output(wait=True)
+    #         continue
+    #     else:
+    #         st.write("QC process paused. You can resume later.")
+    #         break

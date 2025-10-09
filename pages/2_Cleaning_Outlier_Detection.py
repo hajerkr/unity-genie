@@ -165,6 +165,12 @@ def outlier_detection(df: pd.DataFrame, age_column: str, volumetric_columns: lis
     df = df.copy()
     outliers = pd.DataFrame()
     z_score_agg = pd.DataFrame()
+    ##If required volumetric columns do not exist, then warn the user and exit
+    missing_cols = [col for col in volumetric_columns if col not in df.columns]
+    if missing_cols:
+        st.error(f"The following required volumetric columns are missing from the data: {', '.join(missing_cols)}. Please check your input data.")
+        return df, outliers
+
     #Perform outlier detection for each age group
     for age in df[age_column].unique():
         age_df = df[df[age_column] == age]
@@ -224,14 +230,19 @@ def outlier_detection(df: pd.DataFrame, age_column: str, volumetric_columns: lis
         #     z_score_agg = z_scores.copy()
     
     #flag outliers
+    #If outliers is not empty
+    if outliers.empty:
+        st.warning("No outliers detected based on the provided thresholds.")
+        return df, outliers
+    
     outliers["is_outlier"] = True
     tag_only = outliers[["subject", "is_outlier"]].drop_duplicates()
     df = df.copy().merge(tag_only, how='left', on='subject')
     df['is_outlier'] = df['is_outlier'].fillna(0).astype(bool)
     
     first_cols = ["project", "subject", "session","is_outlier","n_roi_outliers_zscore","n_roi_outliers_cov"]
-    if "input gear v" in df.columns:
-         first_cols.append("input gear v")
+    if "input_gear_v" in df.columns:
+         first_cols.append("input_gear_v")
     # Any other columns that are present
     other_cols = [col for col in outliers.columns if col not in first_cols]
     # Reorder
@@ -418,7 +429,7 @@ def process_outliers(df, df_demo, keywords):
         # df_merged.rename(columns={"icv":"total_intracranial"},inplace=True)
             
 
-        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'sex','acquisition','session_qc']  + volumetric_cols
+        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'sex','acquisition','session_qc','analysis_id']  + volumetric_cols
         if "input_gear_v" in df.columns:
             columns_to_keep.insert(6, "input_gear_v")
 
@@ -444,16 +455,17 @@ def process_outliers(df, df_demo, keywords):
         st.info("Running outlier detection using covariance and z-score methods...")
 
         df_, outliers_df = outlier_detection(df_filt[columns_to_keep], age_column = 'age_in_months',volumetric_columns=volumetric_cols, misc_columns= columns_to_keep, cov_thresholds = outlier_thresholds, zscore_thresholds = outlier_thresholds)
-        st.info(f"N outliers found: {len(outliers_df)}")
-        fig = plot_outlier_trend(outliers_df, segmentation_tool)
-        st.pyplot(fig, use_container_width=False) 
-        outliers_path = os.path.join(work_dir,"..","data",f"{segmentation_tool}_outliers.csv")
         
-
+       
         if outliers_df.empty:
-            st.error("No outliers found. Nothing to clean.")
-            # st.stop()
-        else:    
+            continue
+        else:  
+            st.info(f"N outliers found: {len(outliers_df)}")
+            fig = plot_outlier_trend(outliers_df, segmentation_tool)
+            st.pyplot(fig, use_container_width=False) 
+            outliers_path = os.path.join(work_dir,"..","data",f"{segmentation_tool}_outliers.csv")
+
+
             outliers_df.to_csv(outliers_path, index=False)
             
             st.success("Download complete! File can be found in the data folder.")

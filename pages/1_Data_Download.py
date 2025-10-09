@@ -37,7 +37,7 @@ def download_derivatives(project_id, segtool, gear_versions, keywords, timestamp
     
     print(f"User: {fw.get_current_user().firstname} {fw.get_current_user().lastname}")
     project = fw.projects.find_first(f'label={project_id}')
-    st.info(f"Project: {project_id} Subjects n = {len(project.subjects())}\nSessions n = {len(project.sessions())}...")
+    st.info(f"Project: {project_id} Subjects n = {len(project.subjects())}  \nSessions n = {len(project.sessions())}...")
 
     # Create a work directory in our local "home" directory
     #Pass the directory relative to the script
@@ -68,10 +68,7 @@ def download_derivatives(project_id, segtool, gear_versions, keywords, timestamp
     # max_sessions = st.sidebar.slider("Select max number of sessions to fetch:", min_value=1, max_value=len(sessions), value=len(sessions))
     # sessions = sessions[:max_sessions]
 
-    
-        
-
-    for i, session in enumerate(sessions):
+    for i, session in enumerate(sessions[:30]):
         session = session.reload()
         ses_label = session.label
         sub_label = session.subject.label
@@ -134,6 +131,8 @@ def download_derivatives(project_id, segtool, gear_versions, keywords, timestamp
                         results["age"] = session.info.get('childTimepointAge_months', results.get("age","n/a"))
                         results["sex"] = session.info.get('childBiologicalSex', 'n/a')
                         results["project"] = project.label
+                        #Get analysis id
+                        results["analysis_id"] = analysis.id
                         #Instead of blindly appending, ensure differences in columns are handled
                         #Drop "Unnamed" columns if they exist
                         results = results.loc[:, ~results.columns.str.contains('^Unnamed')]                                

@@ -3,3 +3,7 @@ pandas
 streamlit
 flywheel
 python-dotenv
+nibabel
+nilearn
+flywheel-sdk
+pillow
