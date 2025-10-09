@@ -29,7 +29,7 @@ work_dir = Path(__file__).parent/'./docs/'
 st.set_page_config(page_title="Neuroimaging Pipeline", layout="wide")
 st.image(os.path.join(work_dir,"logo.jpg"), width=200)  # custom size instead of 'use_column_width'
 st.title("🧠 ULF MRI Processing Dashboard")
-st.snow()
+# st.snow()
 # Sidebar for navigation
 st.write("Choose a module:")
 
