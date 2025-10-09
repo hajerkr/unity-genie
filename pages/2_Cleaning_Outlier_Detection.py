@@ -2,7 +2,7 @@
 import pandas as pd
 import streamlit as st
 
-from shared.utils.curate_output import demo
+# from shared.utils.curate_output import demo
 
 import streamlit as st
 from statannot import add_stat_annotation  
