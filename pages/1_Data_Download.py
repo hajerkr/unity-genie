@@ -27,9 +27,7 @@ def download_derivatives(project_id, segtool, gear_versions, keywords, timestamp
     """
 
     # config = dotenv_values(os.path.join(Path(__file__).parent/".."), ".env")
-      
-    # api_key =config['FW_CLI_API_KEY']
-    # Connect to your Flywheel instance
+
     if timestampFilter is None:
         timestampFilter = datetime(2020, 1, 1, 0, 0, 0, 0, pytz.UTC)
 
@@ -274,7 +272,16 @@ st.sidebar.header("Settings")
 # Now you can access them like this:
 API_KEY = os.getenv("FW_CLI_API_KEY")
 if API_KEY is None:
-    raise ValueError("API_KEY not found. Please add it to your .env file.")
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = None
+
+    API_KEY = st.text_input("Enter Flywheel API key:", type="password")
+
+    if API_KEY:
+        st.session_state.api_key = API_KEY
+        
+    else:
+        raise ValueError("API_KEY not found. Please add it to your .env file.")
 
 fw = flywheel.Client(api_key=API_KEY)
 

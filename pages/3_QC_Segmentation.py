@@ -465,7 +465,16 @@ def qc_subject(row, segmentation_tool, metrics):
 # Now you can access them like this:
 API_KEY = os.getenv("FW_CLI_API_KEY")
 if API_KEY is None:
-    raise ValueError("API_KEY not found. Please add it to your .env file.")
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = None
+
+    API_KEY = st.text_input("Enter Flywheel API key:", type="password")
+
+    if API_KEY:
+        st.session_state.api_key = API_KEY
+        
+    else:
+        raise ValueError("API_KEY not found. Please add it to your .env file.")
 
 fw = flywheel.Client(api_key=API_KEY)
 
