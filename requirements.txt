@@ -1,9 +1,32 @@
-moviepy
+# Core dependencies
 pandas
-streamlit
-flywheel
+numpy
+PyYAML
 python-dotenv
+packaging
+tqdm
+pathvalidate
+pytz
+
+# Visualization and UI
+streamlit
+plotly
+matplotlib
+seaborn
+imageio
+pillow
+moviepy
+ipywidgets
+statannot
+
+# Neuroimaging
 nibabel
 nilearn
+scikit-image
+
+# Flywheel SDK
+flywheel
 flywheel-sdk
-pillow
+
+# Jupyter/IPython
+ipython
