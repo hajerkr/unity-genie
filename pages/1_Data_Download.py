@@ -15,6 +15,7 @@ import numpy as np
 import yaml
 from packaging import version
 from dotenv import load_dotenv
+from utils.authentication import login_screen
 
 def download_derivatives(project_id, segtool, gear_versions, keywords, timestampFilter,fw):
     """
@@ -272,18 +273,7 @@ st.sidebar.header("Settings")
 # Now you can access them like this:
 API_KEY = os.getenv("FW_CLI_API_KEY")
 if API_KEY is None:
-    if "api_key" not in st.session_state:
-        st.session_state.api_key = None
-
-    API_KEY = st.text_input("Enter Flywheel API key:", type="password")
-
-    if API_KEY:
-        st.session_state.api_key = API_KEY
-        
-    else:
-        raise ValueError("API_KEY not found. Please add it to your .env file.")
-
-fw = flywheel.Client(api_key=API_KEY)
+    login_screen()
 
 @st.cache_data(ttl=600)
 def get_projects():
@@ -306,7 +296,9 @@ derivative_type = st.sidebar.radio("Segmentaion Tool:", ["recon-all-clinical", "
 #         st.success("Fetched gear versions!")
 
 #Add number slider for number of versions to include
-gear_versions = st.sidebar.slider("Last gear versions:", min_value=1, max_value=10, value=3)
+gear_vesions = 5
+# gear_versions = st.sidebar.slider("Last gear versions:", min_value=1, max_value=10, value=3)
+
 #Add date picker for after date
 after_date = st.sidebar.date_input("Select date (only fetch analyses after this date):", value=None)
 

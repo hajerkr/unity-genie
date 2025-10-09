@@ -44,7 +44,7 @@ from IPython.display import Image as IPImage, display
 from PIL import Image
 # from utils.giftomp4 import *
 import moviepy.editor as mp
-
+from utils.authentication import login_screen
 
 def convert_gif_to_mp4(gif_path):
 
@@ -331,7 +331,6 @@ def save_rating(ratings_file, responses,project,metrics):
     log.info(f"\nSaved rating: {ratings_file}")
     custom_name = ratings_file.split('/')[-1]
     #project.upload_file(ratings_file, filename=custom_name)
-    log.info("QC responses have been uploaded to the project information tab.")
 
 
     
@@ -360,7 +359,7 @@ def qc_subject(row, segmentation_tool, metrics):
     download_dir = os.path.join(Path(__file__).parent,"..","data")
     with st.spinner("Downloading data..."):
         st.write('Data will be temporarily downloaded to the local machine.')
-        get_data(sub_label, ses_label, asys, segmentation_tool, input_gear, gear_v, download_dir, project, API_KEY)
+        get_data(sub_label, ses_label, asys, segmentation_tool, input_gear, gear_v, download_dir, project, st.session_state.api_key)
     #Create the output video
     segmentation_path , native_scan_path = None, None
     files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
@@ -456,6 +455,8 @@ def qc_subject(row, segmentation_tool, metrics):
                 #Show an alert 
 
                 st.success(f"You have completed the QC for all subjects! 🎉 Data were saved under {os.path.join(download_dir, f'Parcellation_QC_{st.session_state.username.replace(" ","_")}.csv')}")
+                ratings_df = load_ratings(ratings_file, metrics)
+                return ratings_df
                 st.balloons()
                 st.stop() 
             else:
@@ -465,18 +466,20 @@ def qc_subject(row, segmentation_tool, metrics):
 # Now you can access them like this:
 API_KEY = os.getenv("FW_CLI_API_KEY")
 if API_KEY is None:
-    if "api_key" not in st.session_state:
-        st.session_state.api_key = None
+    login_screen()
+    # if "api_key" not in st.session_state:
+    #     st.session_state.api_key = st.text_input("Enter Flywheel API key:", type="password")
 
-    API_KEY = st.text_input("Enter Flywheel API key:", type="password")
-
-    if API_KEY:
-        st.session_state.api_key = API_KEY
+    # if API_KEY:
+    #     st.session_state.api_key = API_KEY
         
-    else:
-        raise ValueError("API_KEY not found. Please add it to your .env file.")
+    # else:
+    #     raise ValueError("API_KEY not found. Please add it to your .env file.")
 
-fw = flywheel.Client(api_key=API_KEY)
+# try:
+#     fw = flywheel.Client(api_key=st.session_state.api_key)
+# except Exception as e:
+#     raise ValueError("Invalid API key or connection error. Please try again.") from e
 
 st.title("🧠 Segmentation QC Demo")
 #Video : /Users/Hajer/unity/fw-notebooks/QC/output_video.mp4
