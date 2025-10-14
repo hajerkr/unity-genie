@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import numpy as np
 import pathlib
 from pathlib import Path
+from utils.authentication import login_screen
 
 # Load variables from .env into environment
 load_dotenv(override=True)
@@ -29,30 +30,6 @@ if "authenticated" not in st.session_state:
 if "api_key" not in st.session_state:
     st.session_state.api_key = None
 
-
-# --- Login screen ---
-def login_screen():
-    st.title("🔐 Welcome to the Flywheel App")
-    st.write("Please enter your Flywheel API key to continue.")
-
-    api_key = st.text_input("Flywheel API Key", type="password")
-
-    if st.button("Log in"):
-        if not api_key:
-            st.warning("Please enter an API key.")
-        else:
-            try:
-                fw = flywheel.Client(api_key)
-                # Simple validation – check that client works
-                user = fw.get_current_user()
-                st.success(f"Logged in as: {user.firstname} {user.lastname}")
-                st.session_state.authenticated = True
-                st.session_state.api_key = api_key
-                st.rerun()
-            except Exception as e:
-                st.error("Invalid API key or connection error. Please try again.")
-
-
 # --- Main app ---
 def main_app():
     # ---- Streamlit App ----
@@ -66,24 +43,32 @@ def main_app():
     # Sidebar for navigation
     st.write("Choose a module:")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         if st.button("📥 Data Download"):
             st.switch_page("pages/1_Data_Download.py")
 
     with col2:
-        if st.button("🧹 Outlier Detection and Cleaning"):
+        if st.button("🧹 Outlier Detection/Cleaning"):
             st.switch_page("pages/2_Cleaning_Outlier_Detection.py")
 
     with col3:
         if st.button("🧩 Segmentation QC"):
             st.switch_page("pages/3_Segmentation_QC.py")
+    with col4:
+        if st.button("📊 Analysis and Visualization"):
+            st.switch_page("pages/4_Analysis_Visualization.py")
 
-# --- Page logic ---
+
 if not st.session_state.authenticated:
-    login_screen()
+    st.session_state.fw = login_screen()
 else:
+    user = st.session_state.fw.get_current_user()
+    st.success(f"Logged in as: {user.firstname} {user.lastname}")
+    st.warning("For security reasons, please do not share your API key with anyone.")
+    st.info("You can now navigate to other pages using the buttons at the top. Do not refresh the page or you will need to log in again.")
     main_app()
+
 
 

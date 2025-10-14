@@ -14,12 +14,14 @@ def login_screen():
             st.warning("Please enter an API key.")
         else:
             try:
-                fw = flywheel.Client(api_key)
+                st.session_state.fw = flywheel.Client(api_key)
                 # Simple validation – check that client works
-                user = fw.get_current_user()
-                st.success(f"Logged in as: {user.firstname} {user.lastname}")
+                
                 st.session_state.authenticated = True
                 st.session_state.api_key = api_key
                 st.rerun()
+                return st.session_state.fw
             except Exception as e:
                 st.error("Invalid API key or connection error. Please try again.")
+    
+    

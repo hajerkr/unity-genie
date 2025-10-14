@@ -463,26 +463,25 @@ def qc_subject(row, segmentation_tool, metrics):
                 st.session_state.row = min(st.session_state.row + 1, len(st.session_state.df_outliers.index) - 1)
                 st.rerun()
 
-# Now you can access them like this:
-API_KEY = os.getenv("FW_CLI_API_KEY")
-if API_KEY is None:
-    login_screen()
-    # if "api_key" not in st.session_state:
-    #     st.session_state.api_key = st.text_input("Enter Flywheel API key:", type="password")
 
-    # if API_KEY:
-    #     st.session_state.api_key = API_KEY
-        
-    # else:
-    #     raise ValueError("API_KEY not found. Please add it to your .env file.")
-
-# try:
-#     fw = flywheel.Client(api_key=st.session_state.api_key)
-# except Exception as e:
-#     raise ValueError("Invalid API key or connection error. Please try again.") from e
-
-st.title("🧠 Segmentation QC Demo")
+st.title("🧠 Segmentation QC")
 #Video : /Users/Hajer/unity/fw-notebooks/QC/output_video.mp4
+
+# --- Session state initialization ---
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "api_key" not in st.session_state:
+    st.session_state.api_key = None
+
+API_KEY = os.getenv("FW_CLI_API_KEY")
+
+if API_KEY == None or API_KEY == "" and st.session_state.authenticated == False:
+    
+    #Display message to enter API KEY in Home page
+    st.warning("Please enter your Flywheel API key in the Home page to continue.")
+    st.stop()
+fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+
 
 #Upload the list of outliers as a csv
 uploaded_outliers = st.file_uploader("Upload outlier file", type=["csv"])
