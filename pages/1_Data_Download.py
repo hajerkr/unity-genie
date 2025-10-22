@@ -228,7 +228,7 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
 
     ############ Single thread download ############
 
-    for i, session in enumerate(sessions):
+    for i, session in enumerate(sessions[:5]):
         session = session.reload()
         ses_label = session.label
         sub_label = session.subject.label
@@ -513,11 +513,8 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     out_csv = f"derivatives_summary_{project_str}_{time_str}.csv"
-    outdir = os.path.join(data_dir, out_csv)
-    #Reorder columns to have project, subject, session, acquisition at the front, as well as 
-    print(outdir)
-    st.session_state.df.to_csv(outdir, index=False)
-    return st.session_state.df
+    
+    return st.session_state.df, out_csv
     
 
 
@@ -641,17 +638,15 @@ if st.sidebar.button("Fetch derivatives"):
         st.error("No derivatives found. Please check your selections and try again.")
         # st.stop()
     else:    
-        st.session_state.df = assemble_csv(derivative_paths)
+        st.session_state.df, outdir = assemble_csv(derivative_paths)
         
         st.success("Download complete!")
         st.dataframe(st.session_state.df)
         
         # Provide CSV download
-        time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
-        csv_path = f"derivatives_summary_{time_str}.csv" #Add today's date to the filename
-
-        if os.path.exists(csv_path):
-            with open(csv_path, "rb") as f:
-                st.download_button("Download CSV", f, file_name=csv_path)
+        st.session_state.df.to_csv(outdir, index=False)
+        if os.path.exists(outdir):
+            with open(outdir, "rb") as f:
+                st.download_button("Download CSV", f, file_name=outdir)
 
 
