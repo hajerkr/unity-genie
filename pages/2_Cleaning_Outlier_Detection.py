@@ -293,8 +293,8 @@ def cleaning_procedure(df_outlier_flag, MM_vols, RA_vols):
     # Step 1: Load the outlier-flagged data
     #df_outlier_flag = pd.read_csv('/Users/Hajer/unity/GF Sprint25/August_London/Data/UNITY-dataTemplate_MRI_outlierFlag.csv')
     st.info(f"Original size .. {df_outlier_flag.shape}")
-
-    dup_keys = ["project", "subject", "session","age",'acquisition']
+    #Keys used to recognise duplicate entries
+    dup_keys = ["project", "subject", "session","childTimepointAge_months",'acquisition']
     volume_cols = [c for c in df_outlier_flag.columns if c.startswith("mm") or c.startswith("ra")]
     #If either of is_recon-all-clinical_outlier or is_minimorph_outlier are missing, add them with False values
     if "is_recon-all-clinical_outlier" not in df_outlier_flag.columns:
@@ -389,7 +389,9 @@ def cleaning_procedure(df_outlier_flag, MM_vols, RA_vols):
 @st.cache_data
 def process_outliers(df, df_demo, keywords):
     key_cols = ["subject", "session", "project"]
-
+    #Get the current project or projects in the dataframe
+    projects = df["project"].unique()
+    df_out = df.copy()
     for segmentation_tool in keywords:
         with open(os.path.join(work_dir, "..","utils","thresholds.yml"), 'r') as f:
             threshold_dictionary = yaml.load(f, Loader=yaml.SafeLoader)
@@ -407,7 +409,7 @@ def process_outliers(df, df_demo, keywords):
         # Merge to bring in age from demo
         if df_demo is not None:
             df_merged = df.merge(
-                df_demo[['subject', 'session', 'age']], 
+                df_demo[['subject', 'session', 'childTimepointAge_months']], 
                 on=['subject', 'session'], 
                 how='left', 
                 suffixes=('', '_from_demo')
@@ -419,17 +421,17 @@ def process_outliers(df, df_demo, keywords):
 
 
         # Fill missing ages using demo
-        df_merged['age'] = df_merged['age'].combine_first(df_merged['age_from_demo'])
+        df_merged['childTimepointAge_months'] = df_merged['childTimepointAge_months'].combine_first(df_merged['age_from_demo'])
 
         # drop the helper column
         df_merged = df_merged.drop(columns=['age_from_demo'])
-        print(f"Number of NA ages: {df['age'].isna().sum()}")
+        print(f"Number of NA ages: {df['childTimepointAge_months'].isna().sum()}")
 
-        df_merged['age_in_months'] = df_merged['age'].apply(lambda x: int(np.ceil(x)) if pd.notnull(x) else np.nan)
+        df_merged['age_in_months'] = df_merged['childTimepointAge_months'].apply(lambda x: int(np.ceil(x)) if pd.notnull(x) else np.nan)
         # df_merged.rename(columns={"icv":"total_intracranial"},inplace=True)
             
 
-        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'sex','acquisition','session_qc','analysis_id']  + volumetric_cols
+        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'childBiologicalSex','acquisition','session_qc','analysis_id_ra','analysis_id_mm']  + volumetric_cols
         if "input_gear_v" in df.columns:
             columns_to_keep.insert(6, "input_gear_v")
 
@@ -454,7 +456,7 @@ def process_outliers(df, df_demo, keywords):
         #Running outlier detection
         st.info("Running outlier detection using covariance and z-score methods...")
 
-        df_, outliers_df = outlier_detection(df_filt[columns_to_keep], age_column = 'age_in_months',volumetric_columns=volumetric_cols, misc_columns= columns_to_keep, cov_thresholds = outlier_thresholds, zscore_thresholds = outlier_thresholds)
+        df_temp, outliers_df = outlier_detection(df_filt[columns_to_keep], age_column = 'age_in_months',volumetric_columns=volumetric_cols, misc_columns= columns_to_keep, cov_thresholds = outlier_thresholds, zscore_thresholds = outlier_thresholds)
         
        
         if outliers_df.empty:
@@ -463,16 +465,15 @@ def process_outliers(df, df_demo, keywords):
             st.info(f"N outliers found: {len(outliers_df)}")
             fig = plot_outlier_trend(outliers_df, segmentation_tool)
             st.pyplot(fig, use_container_width=False) 
-            outliers_path = os.path.join(work_dir,"..","data",f"{segmentation_tool}_outliers.csv")
-
-
+            outliers_path = os.path.join(work_dir,"..","data",f"{'-'.join(projects)}_{segmentation_tool}_outliers.csv")
             outliers_df.to_csv(outliers_path, index=False)
             
             st.success("Download complete! File can be found in the data folder.")
             st.dataframe(outliers_df.head())
 
             # Merge outliers with original dataframe to keep flag
-            merged = df.merge(
+            #print(outliers_df)
+            merged = df_temp.merge(
                 outliers_df[key_cols+volumetric_cols].drop_duplicates(),
                 on=key_cols+volumetric_cols,
                 how="left",
@@ -481,14 +482,27 @@ def process_outliers(df, df_demo, keywords):
 
             #display(merged)
 
-            if f"is_{segmentation_tool}_outlier" not in df:
-                df[f"is_{segmentation_tool}_outlier"] = False
+            # Initialize the outlier flag column only if it doesn't exist
+            if f"is_{segmentation_tool}_outlier" not in df_temp.columns:
+                print(f'Creating outlier flag column: is_{segmentation_tool}_outlier')
+                df_temp[f"is_{segmentation_tool}_outlier"] = False
+            else:
+                print(f'Updating existing outlier flag column: is_{segmentation_tool}_outlier')
 
+            # Set outlier flags only for the current segmentation tool
+            df_temp[f"is_{segmentation_tool}_outlier"] = merged["_merge"] == "both"
+            print(df_temp["project"].unique())
+            print(df_temp[f"is_{segmentation_tool}_outlier"].value_counts())
+            #Merge back to the original dataframe to keep all rows
+            print('Merging is_outlier flags back to the original dataframe...', segmentation_tool)
+            df_out = df_out.merge(
+                df_temp[[*key_cols, f"is_{segmentation_tool}_outlier"]],
+                on=key_cols,
+                how="left"
+            )
 
-            df.loc[merged["_merge"] == "both", f"is_{segmentation_tool}_outlier"] = True
-
-    df.to_csv(os.path.join(work_dir,"..","data",f"allData_outlierFlagged.csv"), index=False)
-    return df
+    
+    return df_out
 
 def main ():
 
@@ -530,7 +544,7 @@ def main ():
         st.dataframe(df_demo.head())
 
         #if file does not have headers "subject", "session", "age", add a warning
-        required_columns = {"subject", "session", "age"}
+        required_columns = {"project","subject", "session", "childTimepointAge_months"}
         
         if not required_columns.issubset(df_demo.columns):
             st.error(f"Demographic file must contain the following columns (name-sensitive): {', '.join(required_columns)}")
@@ -538,7 +552,7 @@ def main ():
 
     #Only enable the button if a file is uploaded
     if st.button("Detect Outliers") and uploaded_file is not None:
-
+        st.session_state["processed_df"] = pd.DataFrame()
         if stratify and len(unique_projects) > 1:
             progress = st.progress(0)
             status = st.empty()
@@ -549,6 +563,8 @@ def main ():
                 processed = process_outliers(df_project, df_demo, keywords)
                 if "processed_df" in st.session_state:
                     st.session_state["processed_df"] = pd.concat([st.session_state["processed_df"], processed], ignore_index=True)
+                    print(st.session_state["processed_df"].columns)
+                    print("Processed df shape:", st.session_state["processed_df"].shape)
                 else:
                     st.session_state["processed_df"] = processed
 
@@ -561,7 +577,8 @@ def main ():
         # processed = process_outliers(df, df_demo, keywords)
         # st.session_state["processed_df"] = processed
             
-        
+        st.session_state["processed_df"].to_csv(os.path.join(work_dir,"..","data",f"allData_outlierFlagged.csv"), index=False)
+
     #Step 2: Get a cleaned dataset
     st.write("### Clean Outliers")
     #Add button to clean outliers
@@ -583,7 +600,7 @@ def main ():
         RA_thickness = [col for col in df_.columns if col.startswith("ra_") and col.endswith('_thickness')]
 
         RA_vols = [col for col in df.columns if col.startswith("ra_") and not(col in (RA_area + RA_thickness))]
-        
+        print(df_.columns)
         clean_df = cleaning_procedure(df_, MM_vols, RA_vols)
         st.success("Outliers cleaned.")
         st.write(f"Size of dataframe after cleaning: {clean_df.shape}")

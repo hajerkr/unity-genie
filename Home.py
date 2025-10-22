@@ -62,7 +62,16 @@ def main_app():
 
 
 if not st.session_state.authenticated:
-    st.session_state.fw = login_screen()
+    #Get API from env 
+    api_key = os.getenv("FW_CLI_API_KEY")
+    if api_key:
+        st.session_state.api_key = api_key
+        st.session_state.fw = flywheel.Client(api_key)
+        st.session_state.authenticated = True
+        st.success("Authenticated using API key from environment.")
+        main_app()
+    else:
+        st.session_state.fw = login_screen()
 else:
     user = st.session_state.fw.get_current_user()
     st.success(f"Logged in as: {user.firstname} {user.lastname}")
