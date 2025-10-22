@@ -238,11 +238,11 @@ def get_data(sub_label, ses_label, asys, seg_gear, input_gear, v,download_dir,pr
                 asys = fw.get_analysis(asys)
                 download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir)
 
-            elif input_gear.startswith("gambas"):
+            elif input_gear is not None and input_gear.startswith("gambas"):
                 seg_gear = seg_gear + "_gambas"
                 print("Looking for anaylyses from ", seg_gear)
             else:
-                matches = [asys for asys in analyses if asys.label.startswith(seg_gear) and asys.job.get('state') == "complete"]
+                matches = [asys for asys in analyses if asys is not None and asys.label.startswith(seg_gear) and asys.job.get('state') == "complete"]
                 print("Matches: ", len(matches),[asys.label for asys in matches] )
                 # If there are no matches, the gear didn't run
                 if len(matches) == 0 and asys is None:
@@ -276,9 +276,16 @@ def get_data(sub_label, ses_label, asys, seg_gear, input_gear, v,download_dir,pr
             
 
 
-def load_ratings(RATINGS_FILE,metrics):
+def load_ratings(RATINGS_FILE,metrics,download=False):
     if os.path.exists(RATINGS_FILE):
-        return pd.read_csv(RATINGS_FILE)
+        if download:
+            ratings_df = pd.read_csv(RATINGS_FILE)
+          
+            st.dataframe(ratings_df)
+            #download_qc_file(RATINGS_FILE)
+            return ratings_df
+        else:
+            return pd.read_csv(RATINGS_FILE)
     
     return pd.DataFrame(columns=["User", "Timestamp", "Project", "Subject", "Session"] + metrics)
     
@@ -344,6 +351,14 @@ def find_csv_file(directory, username):
 
     return None  # No matching file found
 
+
+def download_qc_file(out_dir):
+
+    if os.path.exists(out_dir):
+        with open(out_dir, "rb") as f:
+            st.download_button("Download CSV", f, file_name=out_dir)
+            
+     
 
 def qc_subject(row, segmentation_tool, metrics):
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -454,15 +469,20 @@ def qc_subject(row, segmentation_tool, metrics):
                 #Check if the file exists
                 #Show an alert 
 
-                st.success(f"You have completed the QC for all subjects! 🎉 Data were saved under {os.path.join(download_dir, f'Parcellation_QC_{st.session_state.username.replace(" ","_")}.csv')}")
-                ratings_df = load_ratings(ratings_file, metrics)
-                return ratings_df
+                st.success(f"You have completed the QC for all subjects! 🎉 Move your mose to the top of the table below, and use the export ⬇️ button to download the ratings CSV file.")
                 st.balloons()
-                st.stop() 
+                ratings_df = load_ratings(ratings_file, metrics,download=True)
+                
+                #ratings_df.to_csv(ratings_file, index=False)
+
+                
+                
+                #st.stop() 
             else:
                 st.session_state.row = min(st.session_state.row + 1, len(st.session_state.df_outliers.index) - 1)
                 st.rerun()
 
+    
 
 st.title("🧠 Segmentation QC")
 #Video : /Users/Hajer/unity/fw-notebooks/QC/output_video.mp4
@@ -524,26 +544,17 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
 
     def prev_row():
         st.session_state.row -= 1
-
-    # col1, col2, _, _ = st.columns([0.1, 0.17, 0.1, 0.63])
-
-    # if st.session_state.row < len(st.session_state.df_outliers.index)-1:
-    #     col2.button(">", on_click=next_row)
-    # else:
-    #     col2.write("") 
-
-    # if st.session_state.row > 0:
-    #     col1.button("<", on_click=prev_row)
-    # else:
-    #     col1.write("") 
+ 
     
     current_row = st.session_state.df_outliers.iloc[st.session_state.row]
     print('Current row', current_row)
     # st.write(current_row)
     #Make sure to stop when we reach the last row
     
-    qc_subject(current_row, segmentation_tool, metrics)
+    outdir = qc_subject(current_row, segmentation_tool, metrics)
+
     
+
     
     # if "current_subject_index" not in st.session_state:
     #     st.session_state["current_subject_index"] = 0

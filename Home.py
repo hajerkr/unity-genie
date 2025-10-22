@@ -55,7 +55,7 @@ def main_app():
 
     with col3:
         if st.button("🧩 Segmentation QC"):
-            st.switch_page("pages/3_Segmentation_QC.py")
+            st.switch_page("pages/3_QC_Segmentation.py")
     with col4:
         if st.button("📊 Analysis and Visualization"):
             st.switch_page("pages/4_Analysis_Visualization.py")
