@@ -475,7 +475,7 @@ if "api_key" not in st.session_state:
 
 API_KEY = os.getenv("FW_CLI_API_KEY")
 
-if API_KEY == None or API_KEY == "" and st.session_state.authenticated == False:
+if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == False:
     
     #Display message to enter API KEY in Home page
     st.warning("Please enter your Flywheel API key in the Home page to continue.")
