@@ -4,8 +4,8 @@ import os
 
 # --- Login screen ---
 def login_screen():
-    st.title("🔐 Welcome to the Flywheel App")
-    st.write("Please enter your Flywheel API key to continue.")
+    st.title(" Welcome to the UNITY App")
+    st.write("🔐 Please enter your Flywheel API key to continue.")
 
     api_key = st.text_input("Flywheel API Key", type="password")
 

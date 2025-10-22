@@ -179,8 +179,7 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
 
     # Create a work directory in our local "home" directory
     #Pass the directory relative to the script
-    data_dir = Path(__file__).parent/'../data/'
-    work_dir = Path(__file__).parent
+    
     #work_dir = Path(Path.home()/'../data/', platform='auto')
     # If it doesn't exist, create it
     if not data_dir.exists():
@@ -514,10 +513,11 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     out_csv = f"derivatives_summary_{project_str}_{time_str}.csv"
-    outdir = os.path.join("../data", out_csv)
+    outdir = os.path.join(data_dir, out_csv)
     #Reorder columns to have project, subject, session, acquisition at the front, as well as 
+    print(outdir)
     st.session_state.df.to_csv(outdir, index=False)
-    return st.session_state.df
+    return st.session_state.df, out_csv
     
 
 
@@ -544,6 +544,8 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     st.warning("Please enter your Flywheel API key in the Home page to continue.")
     st.stop()
 fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+data_dir = Path(__file__).parent/'../data/'
+work_dir = Path(__file__).parent
 
 @st.cache_data(ttl=600)
 def get_projects():
@@ -639,16 +641,15 @@ if st.sidebar.button("Fetch derivatives"):
         st.error("No derivatives found. Please check your selections and try again.")
         # st.stop()
     else:    
-        st.session_state.df = assemble_csv(derivative_paths)
-        
-        st.success("Download complete!")
+        st.session_state.df, out_csv = assemble_csv(derivative_paths)
         st.dataframe(st.session_state.df)
         
         # Provide CSV download
-        csv_path = "derivatives_summary.csv" #Add today's date to the filename
+        time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+        csv_path = f"derivatives_summary_{time_str}.csv" #Add today's date to the filename
 
-        if os.path.exists(csv_path):
-            with open(csv_path, "rb") as f:
-                st.download_button("Download CSV", f, file_name=csv_path)
+        # if os.path.exists(csv_path):
+        #     with open(csv_path, "rb") as f:
+        st.download_button("Download CSV", st.session_state.df, file_name=csv_path)
 
 
