@@ -398,7 +398,7 @@ def process_outliers(df, df_demo, keywords):
             outlier_thresholds = threshold_dictionary[segmentation_tool]['thresholds']
             volumetric_cols = threshold_dictionary[segmentation_tool]['volumetric_cols']
 
-
+        suffix = {'minimorph':'mm', 'recon-all-clinical':'ra'}
         #reformat column headers
         #df.columns = df.columns.str.replace('_', ' ').str.replace('-', ' ').str.lower()
 
@@ -431,7 +431,7 @@ def process_outliers(df, df_demo, keywords):
         # df_merged.rename(columns={"icv":"total_intracranial"},inplace=True)
             
 
-        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'childBiologicalSex','acquisition','session_qc','analysis_id_ra','analysis_id_mm']  + volumetric_cols
+        columns_to_keep = ['project', 'subject','session', 'age_in_months', 'childBiologicalSex','acquisition','session_qc'] + [f'analysis_id_{suffix[seg]}' for seg in keywords] + volumetric_cols
         if "input_gear_v" in df.columns:
             columns_to_keep.insert(6, "input_gear_v")
 
@@ -606,8 +606,22 @@ def main ():
         st.write(f"Size of dataframe after cleaning: {clean_df.shape}")
         #Download cleaned dataframe
         clean_path = os.path.join(work_dir,"..", "data",f"alldata_cleaned.csv")
+        cols = clean_df.columns.tolist()
+        front_cols = ['project', 'subject', 'session', 'childTimepointAge_months','childBiologicalSex','studyTimepoint','session_qc','acquisition']
+        ra_cols = [col for col in cols if col.startswith('ra_')]
+        mm_cols = [col for col in cols if col.startswith('mm_')]
+        other_cols = [col for col in cols if col not in front_cols + ra_cols + mm_cols]
+        new_order = front_cols + ra_cols + mm_cols + other_cols
+
+        clean_df = clean_df[new_order]
+
         clean_df.to_csv(clean_path, index=False)
-        st.success("Download complete.")
+
+        st.dataframe(clean_df.head())
+        if os.path.exists(clean_path):
+            with open(clean_path, "rb") as f:
+                st.download_button("Download clean CSV", f, file_name=clean_path)
+
 
 
 #call main
