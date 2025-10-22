@@ -228,7 +228,7 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
 
     ############ Single thread download ############
 
-    for i, session in enumerate(sessions[:5]):
+    for i, session in enumerate(sessions):
         session = session.reload()
         ses_label = session.label
         sub_label = session.subject.label
