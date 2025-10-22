@@ -648,8 +648,8 @@ if st.sidebar.button("Fetch derivatives"):
         time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
         csv_path = f"derivatives_summary_{time_str}.csv" #Add today's date to the filename
 
-        # if os.path.exists(csv_path):
-        #     with open(csv_path, "rb") as f:
-        st.download_button("Download CSV", st.session_state.df, file_name=csv_path)
+        if os.path.exists(csv_path):
+            with open(csv_path, "rb") as f:
+                st.download_button("Download CSV", st.session_state.df, file_name=csv_path)
 
 
