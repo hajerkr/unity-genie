@@ -517,7 +517,7 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     #Reorder columns to have project, subject, session, acquisition at the front, as well as 
     print(outdir)
     st.session_state.df.to_csv(outdir, index=False)
-    return st.session_state.df, out_csv
+    return st.session_state.df
     
 
 
@@ -641,7 +641,9 @@ if st.sidebar.button("Fetch derivatives"):
         st.error("No derivatives found. Please check your selections and try again.")
         # st.stop()
     else:    
-        st.session_state.df, out_csv = assemble_csv(derivative_paths)
+        st.session_state.df = assemble_csv(derivative_paths)
+        
+        st.success("Download complete!")
         st.dataframe(st.session_state.df)
         
         # Provide CSV download
@@ -650,6 +652,6 @@ if st.sidebar.button("Fetch derivatives"):
 
         if os.path.exists(csv_path):
             with open(csv_path, "rb") as f:
-                st.download_button("Download CSV", st.session_state.df, file_name=csv_path)
+                st.download_button("Download CSV", f, file_name=csv_path)
 
 
