@@ -4,11 +4,25 @@ This repository provides a workflow for downloading and aggregating neuroimaging
 
 ### Features
 
+#### Data Download Module
 * Select project(s) to fetch derivatives from
 * Choose derivative type (recon-all / minimorph)
 * Progress bar and status updates during download
 * Combine results into a single CSV
 * Preview and download the aggregated results
+
+#### Data Cleaning Module
+* Detect outliers within an age-group
+* Clean failed segmenations, outliers, duplicate data
+
+#### Segmentation QC
+* Visualise 3-plane segmentation
+* Assess and record the quality of the segmented regions 
+* Produce a csv report on the QC'ed segmentations
+
+#### Batch runs
+* Submit batch jobs at the project level
+* _(Coming soon) Upload a CSV specifying session to process_
 
 ### Requirements
 
@@ -37,6 +51,8 @@ The app automatically loads this file using python-dotenv
 
 ### Usage
 
+To run this app locally:
+
 Run the Streamlit app:
 ```
 streamlit run app.py
@@ -51,13 +67,9 @@ Steps in the app:
 
 Monitor progress in real-time.
 
-Preview the combined CSV and download it.
 
-### Output
+_Note: This app has been deployed on the Streamlit cloud, however access must be requested from the author of this repository._
 
-Individual derivative files are downloaded locally into a project-based folder structure.
-
-A summary CSV (derivatives_summary.csv) is generated, containing merged results across all subjects/projects.
 
 ### Development Notes
 
