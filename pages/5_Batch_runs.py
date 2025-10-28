@@ -9,13 +9,14 @@ def run_gambas_jobs(fw, project):
     processed_sessions = 0
     skipped_sessions = 0
     failed_sessions = 0
+    status = st.empty()
 
     for session in project.sessions():
         #If it hasn't ran gambas yet, run it
         # Find the most recent gambas analysis
         gambas_file = find_latest_gambas_file(session)
         if gambas_file:
-            st.status(f"GAMBAS already run for {session.label}, skipping.")
+            status.text(f"GAMBAS already run for {session.label}, skipping.")
             skipped_sessions += 1
             continue
 
@@ -23,10 +24,10 @@ def run_gambas_jobs(fw, project):
         if job_id:
             job_list.append(job_id)
             processed_sessions += 1
-            st.status(f"🚀 Submitted GAMBAS job (ID: {job_id}) for session {session.label}")
+            status.text(f"🚀 Submitted GAMBAS job (ID: {job_id}) for session {session.label}")
         else:
             failed_sessions += 1
-            st.status(f"❌ Failed to submit GAMBAS job for session {session.label}")
+            status.text(f"❌ Failed to submit GAMBAS job for session {session.label}")
     
 
 
@@ -43,7 +44,7 @@ def submit_gambas(fw, session):
     EXCLUDE_PATTERNS = ['Segmentation', 'Align', 'Mapping']
     INCLUDE_PATTERN = 'T2'
     PLANE_TYPES = ['AXI']
-
+    status = st.empty()
     # Look at every acquisition in the session
     for acquisition in session.acquisitions.iter():
         acquisition = acquisition.reload()
@@ -77,7 +78,7 @@ def submit_gambas(fw, session):
             return job_id
             
         except Exception as e:
-            print(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
+            status.text(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
 
 
 # def run_segmentation(project, gearname, gambas=False):
@@ -93,11 +94,11 @@ def submit_gambas(fw, session):
 #             segmentation = [asys for asys in session.analyses if asys.gear_info is not None and asys.gear_info.get('name') == gearname and asys.job.get('state') == 'complete']
 
 #             if segmentation:
-#                 st.status(f"Skipping {session.label} as {gearname} has already been run.")
+#                 status.text(f"Skipping {session.label} as {gearname} has already been run.")
                 
 #             analysis_tag = gearname
 #             inputfile = None
-#             st.status("Parsing... ", subject.label, session.label)
+#             status.text("Parsing... ", subject.label, session.label)
 
 #             inputs = {}
 #             analyses = session.analyses
@@ -220,84 +221,41 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
     processed_sessions = 0
     skipped_sessions = 0
     failed_sessions = 0
-    
-    st.info(f"🚀 Starting {gearname} job submission.  \n📁 Processing project: {project}")
-    project_ = fw.projects.find_first(f'label={project}')
+    status = st.empty()
+    st.info(f"🚀 Starting {gearname} job submission.  \n📁 Processing project: {project.label}")
+    project_ = fw.projects.find_first(f'label={project.label}')
     project = project_.reload()
-    st.info(f"Project has {len(project.subjects())} subjects")
     # Loop through subjects and sessions
     for subject in project.subjects():
         if not (subject.label.startswith("137-")): #Ensure this does not run on the phantom - waste of resource and nonsense results
             for session in subject.sessions():
                 session = session.reload()
                 session_id = f"{project.label}/{subject.label}/{session.label}"
-                st.status(f"\n🔍 Checking session: {session_id} for subject {subject.label}")
+                status.text(f"\n🔍 Checking session: {session_id} for subject {subject.label}")
                 try:
                     # Check if gear already completed specifically for gambas input
                     ### GAMBAS CHECKS ####
                     if gambas:
                         if has_completed_seg(session, gear, gambas=True):
-                            st.status(f"✅ {gear} with gambas input already complete, skipping")
+                            status.text(f"✅ {gearname} with gambas input already complete, skipping")
                             skipped_sessions += 1
                             continue
                     
                         # Find the most recent gambas analysis
                         gambas_file = find_latest_gambas_file(session)
                         if not gambas_file:
-                            st.status(f"⚠️ No suitable gambas file found. Submitting a gambas job...")
+                            status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job...")
                             #Add a function to run gambas if nothing has been found
-                            submit_gambas(fw, session)
+                            job_id = submit_gambas(fw, session)
                             try:
                                 job_list.append(job_id)
-                                print(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                                status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
                             except Exception as e:
-                                    print(f"WARNING: Job cannot be sent. Error: {e}")
+                                    status.text(f"WARNING: Job cannot be sent. Error: {e}")
 
                             skipped_sessions += 1
                             continue
-            
-
-                        #     inputs = {}
-                        #     EXCLUDE_PATTERNS = ['Segmentation', 'Align', 'Mapping']
-                        #     INCLUDE_PATTERN = 'T2'
-                        #     PLANE_TYPES = ['AXI']
-
-                        # # Look at every acquisition in the session
-                        #     for acquisition in session.acquisitions.iter():
-                        #         acquisition = acquisition.reload()
-                        #         for file in acquisition.files:
-                        #         # We only want anatomical Nifti's
-                        #             if file.type == 'nifti' and INCLUDE_PATTERN in file.name:
-                        #                 if all(pattern not in file.name for pattern in EXCLUDE_PATTERNS):
-                        #                     for plane in PLANE_TYPES:
-                        #                         if plane in file.name:
-                        #                             input_label = plane.lower()
-                        #                             inputs["input"] = file
-                        #                             print("inputs: ", file.name)
-                        #                             break
-
-                                
-                        #     if inputs:                           
-                        #         try:
-                        #         # The destination for this analysis will be on the session
-                        #             dest = session
-                        #             gear_gambas = fw.lookup('gears/gambas')
-                        #             time_fmt = '%d-%m-%Y_%H-%M-%S'
-                        #             analysis_tag = 'gambas'
-                        #             analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
-                        #             job_id = gear_gambas.run(
-                        #                 analysis_label=analysis_label,
-                        #                 inputs=inputs,
-                        #                 destination=dest,
-                        #                 tags=[''],
-                        #                 config={
-                                        
-                        #                     # "prefix": analysis_tag,
-                        #                 }
-                        #             )
-                                    
-                                
-
+        
                         elif gambas_file:
                             print(f"✅ Found gambas file: {gambas_file.name}")
                         
@@ -305,15 +263,16 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
                             job_id = submit_seg_job(gear, session, gambas=True, input_file=gambas_file)
                             job_list.append(job_id)
                             processed_sessions += 1
-                            print(f"🚀 Submitted {gear} job (ID: {job_id})")
-
+                            print(f"🚀 Submitted {gearname} job (ID: {job_id})")
+                            
+                    ### MRR CHECKS ####
                     elif not gambas and gearname != 'freesurfer-recon-all':
                         # Submit seg job without MRR input
                         inputfile = None
                         mrr_matches = [asys for asys in session.analyses if asys.gear_info is not None and asys.gear_info.get('name') == "mrr" and asys.job.get('state') == 'complete']
                         
                         if not mrr_matches:
-                            st.status(f"⚠️ No suitable MRR analysis found. Skipping session.")
+                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session.")
                             skipped_sessions += 1
                             continue
 
@@ -328,11 +287,11 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
                         job_list.append(job_id)
                         processed_sessions += 1
-                        print(f"🚀 Submitted {gear} job (ID: {job_id})")
+                        print(f"🚀 Submitted {gearname} job (ID: {job_id})")
 
                     elif gearname == 'freesurfer-recon-all':
                         if has_completed_seg(session, gear, gambas=False):
-                            st.status(f"✅ {gear} already complete, skipping")
+                            status.text(f"✅ {gearname} already complete, skipping")
                             skipped_sessions += 1
                             continue
                         
@@ -349,14 +308,14 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
                             if inputfile:
                                 break
                         if not inputfile:
-                            st.status(f"⚠️ No suitable T1w acquisition found with label containing '{t1w_label_string}'. Skipping session.")
+                            status.text(f"⚠️ No suitable T1w acquisition found with label containing '{t1w_label_string}'. Skipping session.")
                             skipped_sessions += 1
                             continue
                         # Submit seg job with T1w input
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
                         
                 except Exception as e:
-                    print(f"❌ Error processing session {session_id}: {str(e)}")
+                    status.text(f"❌ Error processing session {session_id}: {str(e)}")
                     failed_sessions += 1
                     continue
         
@@ -378,7 +337,7 @@ def has_completed_seg(session, gear,gambas=False):
         gear_name = analysis.gear_info.get('name', '').lower()
         #gear_version = analysis.gear_info.get('version', '')
         
-        if gear in gear_name : #and gear_version == target_version:
+        if gear.gear.name in gear_name : #and gear_version == target_version:
             job_state = analysis.job.get('state') if analysis.job else None
             if gambas and 'gambas' in analysis.label.lower() and job_state == 'complete':
                 return True
@@ -433,7 +392,7 @@ def find_latest_gambas_file(session):
     print(f"   Files in analysis: {[f.name for f in latest_gambas.files]}")
     
     # Find gambas output files - specifically look for files ending with "rec-axi_T2w_gambas.nii.gz"
-    pattern = re.compile(r"rec-axi*_T2w_(gambas|ResCNN)\.nii\.gz$")
+    pattern = re.compile(r"rec-axi.*_T2w_(gambas|ResCNN)\.nii\.gz$")
 
     gambas_files = [
         f for f in latest_gambas.files
@@ -460,7 +419,7 @@ def is_gambas_analysis(analysis):
             return True
     
     # If no gear_info, check the analysis label for gambas version pattern
-    if analysis.label:
+    elif analysis.label:
         label = analysis.label.lower()
         # Look for patterns like 'gambas/0.4.14' or 'gambas/0.4.17'
         if "gambas" in label and ("0.4.17" in label or "0.4.14" in label):
@@ -543,7 +502,7 @@ def run_circumference_gear(fw, project, session=None):
     processed_sessions = 0
     skipped_sessions = 0
     failed_sessions = 0
-
+    status = st.empty()
     gear =  fw.lookup('gears/circumference')
     
     # Initialize gear_job_list
@@ -556,7 +515,7 @@ def run_circumference_gear(fw, project, session=None):
         session = session.reload()
         if session is not None:
             inputfile = None
-            st.status("Parsing... ", session.label)
+            status.text(f"Parsing...  {session.label}")
 
             inputs = {}
 
@@ -645,6 +604,7 @@ def run_circumference_gear(fw, project, session=None):
                             )
                             job_list.append(job_id)
                             print("Submitting Job: Check Jobs Log", dest.label)
+                            processed_sessions += 1
                         except Exception as e:
                             print(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
 
@@ -692,7 +652,7 @@ selected_project = next((project for project in project_list if project.label ==
 if selected_project is None:
     st.warning("Please select a valid project.")
     st.stop()
-st.info(f"Project: {selected_project.label} Subjects n = {len(selected_project.subjects())}\nSessions n = {len(selected_project.sessions())}...")
+st.info(f"Project: {selected_project.label} Subjects n = {len(selected_project.subjects())}  \nSessions n = {len(selected_project.sessions())}")
 fw_project = fw.projects.find_first(f'label={selected_project.label}')
 
 if selected_gear == "Freesurfer-recon-all":
@@ -707,14 +667,14 @@ if st.button("Run Batch Job"):
         run_circumference_gear(fw, fw_project)
 
     elif selected_gear == "Recon-all-clinical (gambas input)":
-        job_list = run_seg_jobs(fw_project, fw, 'recon-all-clinical', gambas=True)
+        job_list = run_seg_jobs( fw, fw_project,'recon-all-clinical', gambas=True)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
             check_job_status(fw, job_list)
         else:
             st.info("No recon-all-clinical jobs were submitted.")
     elif selected_gear == "Recon-all-clinical (MRR input)":
-        job_list = run_seg_jobs(fw_project, fw, 'recon-all-clinical', gambas=False)
+        job_list = run_seg_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
             check_job_status(fw, job_list)
@@ -726,7 +686,7 @@ if st.button("Run Batch Job"):
         #Have user enter i a textbox the string to look for in the acquisition label
         #t1w_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
         if t1w_label_string.strip() is not "":
-            job_list = run_seg_jobs(fw_project, fw, 'freesurfer-recon-all', gambas=False)
+            job_list = run_seg_jobs(fw, fw_project, 'freesurfer-recon-all', gambas=False)
 
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
