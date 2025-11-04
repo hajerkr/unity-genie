@@ -170,7 +170,7 @@ def nifti_overlay_gif_3planes(native_path, seg_path,
 
     # --- Save GIF ---
     imageio.mimsave(out_gif, frames, fps=fps, loop=0)
-    print(f"✅ Saved GIF to {out_gif}")
+    # print(f"✅ Saved GIF to {out_gif}")
 
     # --- Convert to MP4 ---
     out_mp4 = convert_gif_to_mp4(out_gif)
@@ -193,13 +193,13 @@ def download_analysis_files(asys,sub_label,ses_label,str_pattern,download_dir):
 
         #if file.name.endswith('aparc+aseg.nii.gz') or file.name.endswith('synthSR.nii.gz') or re.search('ResCNN.*\.nii.gz', file.name) or re.search('mrr_fast.*\.nii.gz', file.name) or re.search('mrr-axireg.*\.nii.gz', file.name) or re.search('.*\.zip', file.name):
             parcellation = file
-            print("Found ", file.name)
+            # print("Found ", file.name)
             if file :
                 
                 download_path = os.path.join(download_dir , parcellation.name)
                 
                 parcellation.download(download_path)
-                print('Downloaded parcellation ',download_path)
+                # print('Downloaded parcellation ',download_path)
                 
 
 def get_data(sub_label, ses_label, asys, seg_gear, input_gear, v,download_dir,project,api_key):
@@ -240,10 +240,10 @@ def get_data(sub_label, ses_label, asys, seg_gear, input_gear, v,download_dir,pr
 
             elif input_gear is not None and input_gear.startswith("gambas"):
                 seg_gear = seg_gear + "_gambas"
-                print("Looking for anaylyses from ", seg_gear)
+                # print("Looking for anaylyses from ", seg_gear)
             else:
                 matches = [asys for asys in analyses if asys is not None and asys.label.startswith(seg_gear) and asys.job.get('state') == "complete"]
-                print("Matches: ", len(matches),[asys.label for asys in matches] )
+                # print("Matches: ", len(matches),[asys.label for asys in matches] )
                 # If there are no matches, the gear didn't run
                 if len(matches) == 0 and asys is None:
                     run = 'False'
@@ -287,7 +287,7 @@ def load_ratings(RATINGS_FILE,metrics,download=False):
         else:
             return pd.read_csv(RATINGS_FILE)
     
-    return pd.DataFrame(columns=["User", "Timestamp", "Project", "Subject", "Session"] + metrics)
+    return pd.DataFrame(columns=["user", "timestamp", "project", "subject", "session"] + metrics)
     
 # Function to simplify acquisition labels
 def simplify_label(label):
@@ -326,8 +326,8 @@ def simplify_label(label):
 
 def save_rating(ratings_file, responses,project,metrics):
     df = load_ratings(ratings_file,metrics)
-    print(df.columns)
-    print(responses, len(responses))
+    # print(df.columns)
+    # print(responses, len(responses))
     new_entry = pd.DataFrame([responses], 
                               columns=df.columns)
     
@@ -337,10 +337,54 @@ def save_rating(ratings_file, responses,project,metrics):
     df.to_csv(ratings_file, index=False)
     log.info(f"\nSaved rating: {ratings_file}")
     custom_name = ratings_file.split('/')[-1]
-    #project.upload_file(ratings_file, filename=custom_name)
+    project.upload_file(ratings_file, filename=custom_name)
 
 
-    
+def check_previous_reviews(project, username):
+
+    asys = project.analyses
+    filtered_analyses = [a for a in asys if username.replace(' ','').lower() in a.label.lower()]
+    reviewed = False
+    user_asys_id = ""
+    old_ratings_file_path = ""
+
+    if filtered_analyses:
+        filtered_analyses = filtered_analyses[-1]
+        user_asys_id = filtered_analyses.id
+        files = filtered_analyses.files
+        csv_files = [f for f in files if f.name.endswith(".csv")]
+        if csv_files:
+            for csv_file in csv_files:
+                # Download CSV file
+                #Make directory if it does not exist
+                os.makedirs(os.path.join(Path(__file__).parent,"..","Results"), exist_ok=True)
+                download_dir = os.path.join(Path(__file__).parent,"..","Results")
+                old_ratings_file_path = os.path.join(download_dir, csv_file.name)
+                try:
+                    filtered_analyses.download_file(csv_file.name,old_ratings_file_path)
+                    reviewed = True
+                    df = pd.read_csv(old_ratings_file_path)
+                    #print(f"Downloaded: {csv_file.name} to {old_ratings_file_path}")
+                    if not df.empty and {"subject", "session", "user"}.issubset(df.columns):
+                        print(f'Data previously reviewed by {username}', user_asys_id)
+                        st.session_state.asys = filtered_analyses
+                        # print(f'Timestamp: {filtered_analyses.label.split("_")[1]} {filtered_analyses.label.split("_")[2]}')
+            
+                except Exception as e:
+                    print('Exception caught: ', e)
+        else:
+            print(f"No CSV files found in analysis: {filtered_analyses.label}")
+    else:
+        print(f"User {username} has not reviewed any images yet.")
+        #Make a analysis container for the user
+        analysis = project.add_analysis(
+            label=f'Segmentation_QC_{st.session_state.username.replace(" ","_")}'
+        )
+        user_asys_id = analysis.id
+        st.session_state.asys = analysis
+
+    return reviewed, user_asys_id, old_ratings_file_path
+
 def find_csv_file(directory, username):
     username_cleaned = username.replace(" ", "")
     
@@ -372,39 +416,6 @@ def qc_subject(row, segmentation_tool, metrics):
     project = project.reload()
     
     download_dir = os.path.join(Path(__file__).parent,"..","data")
-    with st.spinner("Downloading data..."):
-        st.write('Data will be temporarily downloaded to the local machine.')
-        get_data(sub_label, ses_label, asys, segmentation_tool, input_gear, gear_v, download_dir, project, st.session_state.api_key)
-    #Create the output video
-    segmentation_path , native_scan_path = None, None
-    files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
-
-    for file in files:
-        print(file)
-        if file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz'):
-            segmentation_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
-        if file.endswith('synthSR.nii.gz'):
-            print("Found synthSR")
-            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
-            #As soon as we find segmentation and native scan, we can stop    
-        elif file.endswith('.nii.gz') and not file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz') and st.session_state.segmentation_tool != "recon-all-clinical":   
-            
-            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
-
-    if segmentation_path is None or native_scan_path is None:
-        st.error(f"Missing files for {sub_label} {ses_label}. Skipping...")
-        return
-
-    print("NATIVE SCAN AND SEGMENTATION SCAN: ", native_scan_path, segmentation_path)
-    out_mp4 = nifti_overlay_gif_3planes(native_scan_path, segmentation_path,
-        out_gif=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.gif",
-        out_mp4=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4",
-        target_height=200, alpha=0.4, cmap="viridis",
-        fps=5, layout="horizontal")
-    
-    #When the video is ready, delete the local nifti files to save space
-    os.remove(native_scan_path)
-    os.remove(segmentation_path)
     st.write(f"### Subject: {sub_label} Session: {ses_label}")
 
     st.session_state.responses = [st.session_state.username, timestamp, project_label, sub_label, ses_label] 
@@ -424,13 +435,14 @@ def qc_subject(row, segmentation_tool, metrics):
     outliers = list(set(outlier_rois))
 
     #Display the video
+    out_mp4 = f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4"
     st.video(out_mp4)
     st.write ('⚠️ Regions with outlier metrics for this subject (using z score and cov):')
     st.write(f"{outliers}")
 
    
     with st.form("qc_form", clear_on_submit=True):
-        print(st.session_state.responses)
+        # print(st.session_state.responses)
         # --- Display all questions harcoded ---
         st.write("Answer the questions below:")
         metric1 = "Are the main brain structures correctly segmented (e.g., gray/white matter, ventricles)? (Y/N)"
@@ -455,31 +467,36 @@ def qc_subject(row, segmentation_tool, metrics):
 
         if submitted:
             # st.session_state.responses  = responses
+            #Print the shape of df_outliers
+            # print("DF Outliers shape (inside QCing): ", st.session_state.df_outliers.shape)
             st.success("All questions answered! ✅")
-            ratings_file = os.path.join(download_dir, f'Parcellation_QC_{st.session_state.username.replace(" ","_")}.csv')
+            ratings_file = os.path.join(download_dir, f'Segmentation_QC_{st.session_state.username.replace(" ","_")}.csv')
             save_rating(ratings_file, st.session_state.responses, project, metrics)
             # Advance to next row and refresh UI without losing state
-            if "row" not in st.session_state:
-                st.session_state.row = 0
+            # if "row" not in st.session_state:
+            #     print("Initializing row index AGAIN...")
+            #     st.session_state.row = 0
             
 
             current = st.session_state.row == len(st.session_state.df_outliers.index) - 1
-            print('Current index', st.session_state.row, current, len(st.session_state.df_outliers.index))
+
+            print('Inside QCing - current index: ', st.session_state.row, current, len(st.session_state.df_outliers.index))
+            #Upload the ratings file to the analysis container
+            st.session_state.asys.upload_file(ratings_file)
             if current:
                 #Check if the file exists
                 #Show an alert 
-
-                st.success(f"You have completed the QC for all subjects! 🎉 Move your mose to the top of the table below, and use the export ⬇️ button to download the ratings CSV file.")
+                # st.session_state.asys.upload_file(ratings_file)
+                st.success(f"You have completed the QC for all subjects! 🎉 Your ratings have been uploaded to an analysis container: {st.session_state.asys.label}.")
                 st.balloons()
                 ratings_df = load_ratings(ratings_file, metrics,download=True)
                 
                 #ratings_df.to_csv(ratings_file, index=False)
-
-                
-                
                 #st.stop() 
             else:
                 st.session_state.row = min(st.session_state.row + 1, len(st.session_state.df_outliers.index) - 1)
+                
+                # st.session_state.asys.upload_file(ratings_file)
                 st.rerun()
 
     
@@ -500,6 +517,9 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     #Display message to enter API KEY in Home page
     st.warning("Please enter your Flywheel API key in the Home page to continue.")
     st.stop()
+else:
+    st.session_state.api_key = API_KEY
+
 fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 
 
@@ -516,9 +536,12 @@ st.session_state.username = st.text_input("Enter your name or initials:")
 if st.session_state.username:
     st.success(f"Hello, {st.session_state.username}! You can proceed with the QC.")
 
-st.session_state.df_outliers = None
-if uploaded_outliers is not None:
+if 'df_outliers' not in st.session_state:
+    st.session_state.df_outliers = None
+
+if uploaded_outliers is not None and "row" not in st.session_state:
     st.session_state.df_outliers = pd.read_csv(uploaded_outliers)
+    print("INSTATING DF OUTLIERS: ", st.session_state.df_outliers.shape)
     st.write(f"Outliers DataFrame: {st.session_state.df_outliers.shape[0]} rows and {st.session_state.df_outliers.shape[1]} columns")
     st.dataframe(st.session_state.df_outliers)
 
@@ -534,10 +557,80 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
           "Overall segmentation quality (Good/Poor)", "Include in analysis? (Y/N)",
           "Comments"]
     
-
+    status = st.empty()
     if "row" not in st.session_state:
         print('Initializing row index...')
         st.session_state.row = 0
+
+        #Get unique project from the outliers file
+        project_labels = st.session_state.df_outliers['project'].unique()
+        if len(project_labels) == 1:
+            project_label = project_labels[0]
+            project = fw.projects.find_first(f'label={project_label}')
+            project = project.reload()
+            #Check if QC file is already in the project files and load previous ratings to skip already rated subjects
+            reviewed, user_asys_id, old_ratings_file_path = check_previous_reviews(project, st.session_state.username)
+            if reviewed:
+                st.warning(f"You have already reviewed some subjects for this project. Previous ratings will be loaded from {old_ratings_file_path}.")
+                previous_ratings_df = pd.read_csv(old_ratings_file_path)
+                # print(previous_ratings_df)
+                #Filter out already rated subjects-sessions from df_outliers
+                rated_subjects_sessions = previous_ratings_df[['subject', 'session']].apply(tuple, axis=1).tolist()
+                # rated_subjects = previous_ratings_df['subject'].unique()
+                st.session_state.df_outliers['sub_ses'] = st.session_state.df_outliers[['subject', 'session']].apply(tuple, axis=1)
+                st.session_state.df_outliers = st.session_state.df_outliers[~st.session_state.df_outliers['sub_ses'].isin(rated_subjects_sessions)]
+                
+                # st.session_state.df_outliers = st.session_state.df_outliers[~st.session_state.df_outliers['subject'].isin(rated_subjects)]
+                st.write(f"Remaining subjects to review: {st.session_state.df_outliers.shape[0]}")
+                # st.dataframe(st.session_state.df_outliers)
+
+            #Download all the data for the outliers using the get_data function
+            for _, row in st.session_state.df_outliers.iterrows():
+                sub_label, ses_label = row["subject"],row["session"]
+                asys = row.get("analysis_id", None)
+                sub_label, ses_label = row["subject"],row["session"]
+                project_label = row["project"].strip()
+
+                project = fw.projects.find_first(f'label={project_label}')
+                project = project.reload()
+                
+                download_dir = os.path.join(Path(__file__).parent,"..","data")
+                with st.spinner(f"Downloading data for subject {sub_label} - {ses_label}..."):
+                    status.text('Data will be temporarily downloaded to the local machine.')
+                    get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir, project, st.session_state.api_key)
+
+                    segmentation_path , native_scan_path = None, None
+                    files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
+
+                    for file in files:
+                        print(file)
+                        if file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz'):
+                            segmentation_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+                        if file.endswith('synthSR.nii.gz'):
+                            print("Found synthSR")
+                            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+                            #As soon as we find segmentation and native scan, we can stop    
+                        elif file.endswith('.nii.gz') and not file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz') and st.session_state.segmentation_tool != "recon-all-clinical":   
+                            
+                            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+
+                    if segmentation_path is None or native_scan_path is None:
+                        st.error(f"Missing files for {sub_label} {ses_label}. Skipping...")
+                        continue
+
+                    print("NATIVE SCAN AND SEGMENTATION SCAN: ", native_scan_path, segmentation_path)
+                    out_mp4 = nifti_overlay_gif_3planes(native_scan_path, segmentation_path,
+                        out_gif=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.gif",
+                        out_mp4=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4",
+                        target_height=200, alpha=0.4, cmap="viridis",
+                        fps=5, layout="horizontal")
+                    
+                    #When the video is ready, delete the local nifti files to save space
+                    os.remove(native_scan_path)
+                    os.remove(segmentation_path)
+                    #get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir=os.path.join(Path(__file__).parent,"..","data"), project=project, api_key=st.session_state.api_key)
+
+
 
     def next_row():
         st.session_state.row += 1
@@ -547,7 +640,9 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
  
     
     current_row = st.session_state.df_outliers.iloc[st.session_state.row]
-    print('Current row', current_row)
+    #st.dataframe(st.session_state.df_outliers)
+    # print("DF Outliers shape BEFORE QC_SUBJECT: ", st.session_state.df_outliers.shape)
+    # print('Current row: ', current_row["subject"], current_row["session"], st.session_state.row)
     # st.write(current_row)
     #Make sure to stop when we reach the last row
     
