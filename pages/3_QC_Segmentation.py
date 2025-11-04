@@ -357,8 +357,9 @@ def check_previous_reviews(project, username):
             for csv_file in csv_files:
                 # Download CSV file
                 #Make directory if it does not exist
-                os.makedirs(os.path.join(Path(__file__).parent,"..","Results"), exist_ok=True)
-                download_dir = os.path.join(Path(__file__).parent,"..","Results")
+                
+                os.makedirs(os.path.join(Path(__file__).parent,"..","data"), exist_ok=True)
+                download_dir = os.path.join(Path(__file__).parent,"..","data")
                 old_ratings_file_path = os.path.join(download_dir, csv_file.name)
                 try:
                     filtered_analyses.download_file(csv_file.name,old_ratings_file_path)
@@ -487,7 +488,7 @@ def qc_subject(row, segmentation_tool, metrics):
                 #Check if the file exists
                 #Show an alert 
                 # st.session_state.asys.upload_file(ratings_file)
-                st.success(f"You have completed the QC for all subjects! 🎉 Your ratings have been uploaded to an analysis container: {st.session_state.asys.label}.")
+                st.success(f"You have completed the QC for all subjects! 🎉 Your ratings have been uploaded to the project analysis container: {st.session_state.asys.label}.")
                 st.balloons()
                 ratings_df = load_ratings(ratings_file, metrics,download=True)
                 
@@ -573,6 +574,7 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
             if reviewed:
                 st.warning(f"You have already reviewed some subjects for this project. Previous ratings will be loaded from {old_ratings_file_path}.")
                 previous_ratings_df = pd.read_csv(old_ratings_file_path)
+                st.dataframe(previous_ratings_df)
                 # print(previous_ratings_df)
                 #Filter out already rated subjects-sessions from df_outliers
                 rated_subjects_sessions = previous_ratings_df[['subject', 'session']].apply(tuple, axis=1).tolist()
