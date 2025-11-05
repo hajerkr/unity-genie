@@ -343,7 +343,7 @@ def save_rating(ratings_file, responses,project,metrics):
 def check_previous_reviews(project, username):
 
     asys = project.analyses
-    filtered_analyses = [a for a in asys if username.replace(' ','').lower() in a.label.lower()]
+    filtered_analyses = [a for a in asys if username.replace(' ','_').lower() in a.label.lower()]
     reviewed = False
     user_asys_id = ""
     old_ratings_file_path = ""
@@ -387,7 +387,7 @@ def check_previous_reviews(project, username):
     return reviewed, user_asys_id, old_ratings_file_path
 
 def find_csv_file(directory, username):
-    username_cleaned = username.replace(" ", "")
+    username_cleaned = username.replace(" ", "_")
     
     for root, _, files in os.walk(directory):
         for file in files:
@@ -467,6 +467,7 @@ def qc_subject(row, segmentation_tool, metrics):
         submitted = st.form_submit_button('Save/Next subject')
 
         if submitted:
+            
             # st.session_state.responses  = responses
             #Print the shape of df_outliers
             # print("DF Outliers shape (inside QCing): ", st.session_state.df_outliers.shape)
@@ -477,12 +478,18 @@ def qc_subject(row, segmentation_tool, metrics):
             # if "row" not in st.session_state:
             #     print("Initializing row index AGAIN...")
             #     st.session_state.row = 0
+            #     progress = st.progress(0)
+            # else:
+            #     progress = st.progress(0)
+            #     progress.progress((st.session_state.row+1)/len(st.session_state.df_outliers.index))
             
 
             current = st.session_state.row == len(st.session_state.df_outliers.index) - 1
+            
 
             print('Inside QCing - current index: ', st.session_state.row, current, len(st.session_state.df_outliers.index))
             #Upload the ratings file to the analysis container
+            print("Uploading ratings file to analysis container...")
             st.session_state.asys.upload_file(ratings_file)
             if current:
                 #Check if the file exists
@@ -536,6 +543,7 @@ segmentation_suffix = {"minimorph":"segmentation","recon-all-clinical":"aparc+as
 st.session_state.username = st.text_input("Enter your name or initials:")
 if st.session_state.username:
     st.success(f"Hello, {st.session_state.username}! You can proceed with the QC.")
+    st.session_state.username = st.session_state.username.replace(" ","_")
 
 if 'df_outliers' not in st.session_state:
     st.session_state.df_outliers = None
@@ -562,6 +570,7 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
     if "row" not in st.session_state:
         print('Initializing row index...')
         st.session_state.row = 0
+        
 
         #Get unique project from the outliers file
         project_labels = st.session_state.df_outliers['project'].unique()
@@ -572,7 +581,7 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
             #Check if QC file is already in the project files and load previous ratings to skip already rated subjects
             reviewed, user_asys_id, old_ratings_file_path = check_previous_reviews(project, st.session_state.username)
             if reviewed:
-                st.warning(f"You have already reviewed some subjects for this project. Previous ratings will be loaded from {old_ratings_file_path}.")
+                st.warning(f"You have already reviewed some subjects for this project. Previous ratings will be loaded from {st.session_state.asys.label}.")
                 previous_ratings_df = pd.read_csv(old_ratings_file_path)
                 st.dataframe(previous_ratings_df)
                 # print(previous_ratings_df)
@@ -642,6 +651,8 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
  
     
     current_row = st.session_state.df_outliers.iloc[st.session_state.row]
+    progress = st.progress(0)
+    progress.progress((st.session_state.row+1)/len(st.session_state.df_outliers.index))
     #st.dataframe(st.session_state.df_outliers)
     # print("DF Outliers shape BEFORE QC_SUBJECT: ", st.session_state.df_outliers.shape)
     # print('Current row: ', current_row["subject"], current_row["session"], st.session_state.row)
