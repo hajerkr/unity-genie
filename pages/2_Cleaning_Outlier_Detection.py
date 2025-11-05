@@ -5,7 +5,7 @@ import streamlit as st
 # from shared.utils.curate_output import demo
 
 import streamlit as st
-from statannot import add_stat_annotation  
+# from statannot import add_stat_annotation  
 import plotly.graph_objects as go
 import plotly.subplots as subplots
 import datetime
@@ -468,7 +468,6 @@ def process_outliers(df, df_demo, keywords):
             outliers_path = os.path.join(work_dir,"..","data",f"{'-'.join(projects)}_{segmentation_tool}_outliers.csv")
             outliers_df.to_csv(outliers_path, index=False)
             
-            st.success("Download complete! File can be found in the data folder.")
             st.dataframe(outliers_df.head())
 
             # Merge outliers with original dataframe to keep flag
@@ -502,11 +501,12 @@ def process_outliers(df, df_demo, keywords):
             )
 
     
-    return df_out
+    return df_out, outliers_path
 
 def main ():
 
     # Upload a CSV file with the data to clean
+    outliers_path = None
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
 
     #Add check box to ask if cleaning needs to be stratified by project or not
@@ -552,6 +552,7 @@ def main ():
 
     #Only enable the button if a file is uploaded
     if st.button("Detect Outliers") and uploaded_file is not None:
+        
         st.session_state["processed_df"] = pd.DataFrame()
         if stratify and len(unique_projects) > 1:
             progress = st.progress(0)
@@ -560,7 +561,7 @@ def main ():
             for project in unique_projects:
                 st.info(f"Processing project: {project}")
                 df_project = df[df["project"] == project]
-                processed = process_outliers(df_project, df_demo, keywords)
+                processed, outliers_path = process_outliers(df_project, df_demo, keywords)
                 if "processed_df" in st.session_state:
                     st.session_state["processed_df"] = pd.concat([st.session_state["processed_df"], processed], ignore_index=True)
                     print(st.session_state["processed_df"].columns)
@@ -571,13 +572,19 @@ def main ():
                 progress.progress((np.where(unique_projects == project)[0][0] + 1) / len(unique_projects))
         else:
             st.info("Processing all projects together...")
-            processed = process_outliers(df, df_demo, keywords)
+            processed, outliers_path = process_outliers(df, df_demo, keywords)
             st.session_state["processed_df"] = processed
         # st.stop()
         # processed = process_outliers(df, df_demo, keywords)
         # st.session_state["processed_df"] = processed
             
         st.session_state["processed_df"].to_csv(os.path.join(work_dir,"..","data",f"allData_outlierFlagged.csv"), index=False)
+    
+    if outliers_path is not None:
+        #If file exists, provide download button
+        with open(outliers_path, "rb") as f:
+            filename = os.path.basename(outliers_path)
+            st.download_button("Download outliers CSV", f, file_name=filename)
 
     #Step 2: Get a cleaned dataset
     st.write("### Clean Outliers")
