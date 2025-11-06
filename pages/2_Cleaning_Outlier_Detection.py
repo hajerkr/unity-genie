@@ -465,6 +465,9 @@ def process_outliers(df, df_demo, keywords):
             st.info(f"N outliers found: {len(outliers_df)}")
             fig = plot_outlier_trend(outliers_df, segmentation_tool)
             st.pyplot(fig, use_container_width=False) 
+
+            #Make directory if it does not exist
+            os.makedirs(os.path.join(work_dir,"..","data"), exist_ok=True)
             outliers_path = os.path.join(work_dir,"..","data",f"{'-'.join(projects)}_{segmentation_tool}_outliers.csv")
             outliers_df.to_csv(outliers_path, index=False)
             
