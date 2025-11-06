@@ -557,7 +557,7 @@ if uploaded_outliers is not None and "row" not in st.session_state:
 if segmentation_tool and uploaded_outliers is not None and st.session_state.username: #st.button("Start QC") and 
     st.session_state.segmentation_tool = segmentation_tool
     st.write("Starting QC process...")
-    st.write('📋**Instructions**: Review the video below and provide your feedback. You can rate the segmentation quality and add comments as needed.')
+    st.write('📋 **Instructions**: Review the video below and provide your feedback. You can rate the segmentation quality and add comments as needed.')
     
     
 
@@ -640,7 +640,11 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
                     os.remove(segmentation_path)
                     #get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir=os.path.join(Path(__file__).parent,"..","data"), project=project, api_key=st.session_state.api_key)
 
-
+            else:
+                #Create an analysis container for the user
+                st.session_state.asys = project.add_analysis(
+                    label=f'Segmentation_QC_{st.session_state.username.replace(" ","_")}'
+                )
 
     def next_row():
         st.session_state.row += 1
