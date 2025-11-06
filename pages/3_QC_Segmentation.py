@@ -557,7 +557,7 @@ if uploaded_outliers is not None and "row" not in st.session_state:
 if segmentation_tool and uploaded_outliers is not None and st.session_state.username: #st.button("Start QC") and 
     st.session_state.segmentation_tool = segmentation_tool
     st.write("Starting QC process...")
-    st.write('Instructions: Review the video below and provide your feedback. You can rate the segmentation quality and add comments as needed.')
+    st.write('📋**Instructions**: Review the video below and provide your feedback. You can rate the segmentation quality and add comments as needed.')
     
     
 
@@ -607,7 +607,6 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
                 
                 download_dir = os.path.join(Path(__file__).parent,"..","data")
                 with st.spinner(f"Downloading data for subject {sub_label} - {ses_label}..."):
-                    status.text('Data will be temporarily downloaded to the local machine.')
                     get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir, project, st.session_state.api_key)
 
                     segmentation_path , native_scan_path = None, None
