@@ -1,6 +1,7 @@
 import streamlit as st
 import flywheel
 import os
+from fw_client import FWClient
 
 # --- Login screen ---
 def login_screen():
