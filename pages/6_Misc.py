@@ -11,12 +11,12 @@ def load_flywheel_data(project_label):
     api_key=st.session_state.api_key,
     timeout=100,
     )
-    fw = flywheel.Client(api_key=st.session_state.api_key)
+    #fw = flywheel.Client(api_key=st.session_state.api_key)
 
     protocol_label = 'QC'
     #project_label = "AKU MiNE Low Field"
 
-    project = fw.projects.find_one(f'label={project_label}')
+    project = st.session_state.fw.projects.find_one(f'label={project_label}')
     project = project.reload()
 
     dest_proj_id = project.id
@@ -54,7 +54,7 @@ def load_flywheel_data(project_label):
             "Project": project_label,
             "Subject ID": task.parent_info.subject.label,
             "Session ID": task.parent_info.session.label,
-            "Session Timestamp": fw.get(task.parent_info.session._id).reload().timestamp,
+            "Session Timestamp": st.session_state.fw.get(task.parent_info.session._id).reload().timestamp,
             "Acquisition ID": task.parent_info.acquisition.label if task.parent_info.acquisition else None,
             "Status": task.status
         }
@@ -87,20 +87,19 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     st.stop()
 else:
     st.session_state.api_key = API_KEY
-    st.session_state.authenticated = True
 
-fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+#fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 data_dir = Path(__file__).parent/'../data/'
 
 #Add dropdown to select project
 @st.cache_data(ttl=600)
 def get_projects():
-    return [p.label for p in fw.projects()]
+    return [p.label for p in st.session_state.fw.projects()]
 
 projects = get_projects()
 
 project_label = st.selectbox("Select Project", projects)
-selected_project = fw.projects.find_first(f'label={project_label}')
+selected_project = st.session_state.fw.projects.find_first(f'label={project_label}')
 
 if st.button("Fetch Data"):
     with st.spinner("Loading data from Flywheel..."):
