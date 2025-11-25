@@ -7,10 +7,10 @@ from pathlib import Path
 import pathvalidate as pv
 
 def load_flywheel_data(project_label):
-    fwclient = FWClient(
-    api_key=st.session_state.api_key,
-    timeout=100,
-    )
+    # fwclient = FWClient(
+    # api_key=st.session_state.api_key,
+    # timeout=100,
+    # )
     #fw = flywheel.Client(api_key=st.session_state.api_key)
 
     protocol_label = 'QC'
@@ -24,17 +24,17 @@ def load_flywheel_data(project_label):
     if protocol_label:
         protocol_filter += f",label={protocol_label}"
 
-    protocol = fwclient.get(
+    protocol = st.session_state.fwclient.get(
         f"/api/read_task_protocols?filter=parents.project={dest_proj_id},label={protocol_label}"
     ).get("results")[0]
 
 
     my_filter = f"protocol_id={protocol._id},status=Todo"
-    reader_tasks_todo = fwclient.get(f"/api/readertasks/project/{dest_proj_id}?filter={my_filter}").to_flat().get("results")
+    reader_tasks_todo = st.session_state.fwclient.get(f"/api/readertasks/project/{dest_proj_id}?filter={my_filter}").to_flat().get("results")
     
 
     my_filter = f"protocol_id={protocol._id},status=In_progress"
-    reader_tasks_inprogress = fwclient.get(f"/api/readertasks/project/{dest_proj_id}?filter={my_filter}").to_flat().get("results")
+    reader_tasks_inprogress = st.session_state.fwclient.get(f"/api/readertasks/project/{dest_proj_id}?filter={my_filter}").to_flat().get("results")
     st.info(f"Tasks In Progress: {len(reader_tasks_inprogress)}  \nTasks To Do: {len(reader_tasks_todo)}")
         
     # Get files that have not been QC'ed

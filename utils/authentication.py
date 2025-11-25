@@ -16,6 +16,10 @@ def login_screen():
             try:
                 st.session_state.fw = flywheel.Client(api_key)
                 # Simple validation – check that client works
+                st.session_state.fwclient = FWClient(
+                    api_key=api_key,
+                    timeout=100,
+                )
                 
                 st.session_state.authenticated = True
                 st.session_state.api_key = api_key
