@@ -87,6 +87,7 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     st.stop()
 else:
     st.session_state.api_key = API_KEY
+    st.session_state.authenticated = True
 
 fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 data_dir = Path(__file__).parent/'../data/'
