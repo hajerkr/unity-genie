@@ -64,7 +64,7 @@ def load_flywheel_data(project_label):
     tasks_df = pd.DataFrame(task_details)
 
     # Display the DataFrame
-    st.dataframe(tasks_df.head(4))
+    # st.dataframe(tasks_df.head(4))
     return tasks_df
     
 
