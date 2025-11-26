@@ -50,7 +50,7 @@ def load_flywheel_data(project_label):
     # Iterate over all tasks and collect details
     for task in all_tasks:
         task_info = {
-            # "Task ID": task._id,
+            "Task ID": task.task_id,
             "Project": project_label,
             "Subject ID": task.parent_info.subject.label,
             "Session ID": task.parent_info.session.label,
