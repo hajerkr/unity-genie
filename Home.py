@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-import flywheel
+from flywheel.client import Client
 from dotenv import load_dotenv
 import numpy as np
 import pathlib
@@ -66,7 +66,7 @@ if not st.session_state.authenticated:
     api_key = None #os.getenv("FW_CLI_API_KEY")
     if api_key:
         st.session_state.api_key = api_key
-        st.session_state.fw = flywheel.Client(api_key)
+        st.session_state.fw = Client(api_key)
         st.session_state.authenticated = True
         st.success("Authenticated using API key from environment.")
         main_app()

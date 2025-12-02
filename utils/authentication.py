@@ -1,5 +1,5 @@
 import streamlit as st
-import flywheel
+from flywheel.client import Client
 import os
 from fw_client import FWClient
 
@@ -15,7 +15,7 @@ def login_screen():
             st.warning("Please enter an API key.")
         else:
             try:
-                st.session_state.fw = flywheel.Client(api_key)
+                st.session_state.fw = Client(api_key)
                 # Simple validation – check that client works
                 st.session_state.fwclient = FWClient(
                     api_key=api_key,
