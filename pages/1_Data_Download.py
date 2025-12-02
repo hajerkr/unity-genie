@@ -1,5 +1,5 @@
 import os
-import flywheel
+from flywheel.client import Client
 from pathlib import Path
 import pathvalidate as pv
 import pandas as pd
@@ -8,7 +8,6 @@ import pytz
 import time
 import argparse
 import subprocess
-import flywheel
 import streamlit as st
 import os
 import numpy as np
@@ -540,7 +539,7 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     #Display message to enter API KEY in Home page
     st.warning("Please enter your Flywheel API key in the Home page to continue.")
     st.stop()
-fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+fw = Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 data_dir = Path(__file__).parent/'../data/'
 work_dir = Path(__file__).parent
 

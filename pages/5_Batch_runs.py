@@ -1,5 +1,5 @@
 import streamlit as st
-import flywheel
+from flywheel.client import Client
 import os
 import re
 from datetime import datetime
@@ -628,7 +628,7 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
     #Display message to enter API KEY in Home page
     st.warning("Please enter your Flywheel API key in the Home page to continue.")
     st.stop()
-fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+fw = Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 
 
 #Have a drop down to select batch runs 
