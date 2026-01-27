@@ -205,7 +205,7 @@ def submit_gambas(fw, session):
 #                     print(f"Exception caught for {subject.label}: ", e)
 
 
-def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
+def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
     Run recon-all jobs on the most recent gambas analysis for each session
     if recon-all hasn't already been completed.
@@ -260,7 +260,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
                             print(f"✅ Found gambas file: {gambas_file.name}")
                         
                             # Submit seg job
-                            job_id = submit_seg_job(gear, session, gambas=True, input_file=gambas_file)
+                            job_id = submit_seg_job(gear, session, gambas=True, input_file=gambas_file, analysis_tag=analysis_tag)
                             job_list.append(job_id)
                             processed_sessions += 1
                             print(f"🚀 Submitted {gearname} job (ID: {job_id})")
@@ -313,6 +313,9 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None):
                             continue
                         # Submit seg job with T1w input
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
+
+                   
+
                         
                 except Exception as e:
                     status.text(f"❌ Error processing session {session_id}: {str(e)}")
@@ -428,7 +431,7 @@ def is_gambas_analysis(analysis):
     
     return False
  
-def submit_seg_job(gear, session, input_file, gambas=False):
+def submit_seg_job(gear, session, input_file, gambas=False,analysis_tag=None):
     """
     Submit a segmentation analysis job for the given session and gambas file.
     """
@@ -457,7 +460,7 @@ def submit_seg_job(gear, session, input_file, gambas=False):
         analysis_label=analysis_label,
         inputs=inputs,
         destination=session,
-        tags=['batch','analysis'],
+        tags=['batch','analysis',analysis_tag] if analysis_tag else ['batch','analysis'],
         config=config
     )
     
@@ -644,7 +647,7 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ['Circumference', "Freesurfer-recon-all", "Recon-all-clinical (gambas input)", "Recon-all-clinical (MRR input)",'GAMBAS', 'Minimorph']
+gear_names = ["Circumference", "Freesurfer-recon-all", "Recon-all-clinical (gambas)", "Recon-all-clinical (MRR)","GAMBAS", 'Minimorph',"Supersynth (gambas)"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
@@ -704,5 +707,7 @@ if st.button("Run Batch Job"):
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
 
+    elif selected_gear=="Supersynth (gambas)":
+        job_list = run_seg_jobs(fw, fw_project, 'supersynth', gambas=True, analysis_tag='gpuplus')
 
 
