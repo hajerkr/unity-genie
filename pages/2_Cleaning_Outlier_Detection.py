@@ -302,6 +302,10 @@ def cleaning_procedure(df_outlier_flag, MM_vols, RA_vols):
     if "is_minimorph_outlier" not in df_outlier_flag.columns:
         df_outlier_flag["is_minimorph_outlier"] = False
 
+    #Case the is_outlier columns are not boolean, convert them
+    df_outlier_flag["is_recon-all-clinical_outlier"] = df_outlier_flag["is_recon-all-clinical_outlier"].astype(bool)
+    df_outlier_flag["is_minimorph_outlier"] = df_outlier_flag["is_minimorph_outlier"].astype(bool)
+    
     # Condition 1: RA outlier only, and all MM_vols are NA
     cond1 = (
         (df_outlier_flag["is_recon-all-clinical_outlier"]) &

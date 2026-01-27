@@ -446,6 +446,11 @@ def submit_seg_job(gear, session, input_file, gambas=False):
     config = {}
     if gear_name =="minimorph":
         config= {"age": None}
+    elif gear_name == "infant-freesurfer":
+        config = {
+        "newborn": False,
+        "age": None
+        }
    
     # Submit the job
     job_id = gear.run(
@@ -680,6 +685,14 @@ if st.button("Run Batch Job"):
             check_job_status(fw, job_list)
         else:
             st.info("No recon-all-clinical jobs were submitted.")
+    elif selected_gear == "infant-freesurfer":
+        #Add a true / false checkbox to 
+        job_list = run_seg_jobs(fw, fw_project, 'infant-freesurfer', gambas=False)
+        if job_list:
+            st.success(f"Submitted {len(job_list)} infant-freesurfer jobs.")
+            check_job_status(fw, job_list)
+        else:
+            st.info("No infant-freesurfer jobs were submitted.")
 
     elif selected_gear == "Freesurfer-recon-all":
         #This only takes T1w images
