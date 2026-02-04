@@ -3,7 +3,7 @@ import flywheel
 from pathlib import Path
 import pathvalidate as pv
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import pytz
 import time
 import argparse
@@ -227,15 +227,18 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
     #### End multithreading ####
 
     ############ Single thread download ############
-
+    prisma = pd.read_csv('/Users/Hajer/unity/Simone/rerun-list_PRISMA_recon-all.csv')
     for i, session in enumerate(sessions):
         session = session.reload()
         ses_label = session.label
         sub_label = session.subject.label
         print(sub_label, ses_label)
+        # if sub_label not in prisma.Hyperfine_label:
+        #     continue
+        
         status.text(f"Fetching {sub_label} - {ses_label}...")
         #Iterate through analyses, looking for both gears if derivative_type is "both"
-        analyses = [a for a in session.analyses if a.gear_info is not None and a.gear_info.name in segtool and a.created > timestampFilter] #and a.gear_info.version in gear_versions
+        analyses = [a for a in session.analyses if a.gear_info is not None and a.gear_info.name in segtool and a.created.date() > timestampFilter] #and a.gear_info.version in gear_versions
         if input_source == "MRR":
             #Exclude analyses where session.acquisition.label contains "gambas" (case insensitive)
             analyses = [a for a in analyses if "gambas" not in a.label.lower()]
@@ -572,6 +575,7 @@ gear_vesions = 5
 
 #Add date picker for after date
 after_date = st.sidebar.date_input("Select date (only fetch analyses after this date):", value=None)
+
 
 #Add tickboxes if recon all was selected, to select area, thickness, and volume
 if derivative_type == "recon-all-clinical" or derivative_type == "Both":

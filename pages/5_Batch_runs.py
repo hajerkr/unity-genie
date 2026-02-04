@@ -10,7 +10,7 @@ def run_gambas_jobs(fw, project):
     skipped_sessions = 0
     failed_sessions = 0
     status = st.empty()
-
+    failed_sessions_list = []
     for session in project.sessions():
         #If it hasn't ran gambas yet, run it
         # Find the most recent gambas analysis
@@ -27,13 +27,22 @@ def run_gambas_jobs(fw, project):
             status.text(f"🚀 Submitted GAMBAS job (ID: {job_id}) for session {session.label}")
         else:
             failed_sessions += 1
+            failed_sessions_list.append(session.label)
             status.text(f"❌ Failed to submit GAMBAS job for session {session.label}")
     
 
 
     # Summary
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
- 
+    #Return CSV with skipped sessions
+    if failed_sessions_list.append(session.label):
+        skipped_sessions_str = "\n".join(failed_sessions_list.append(session.label))
+        st.download_button(
+            label="Download Failed Sessions",
+            data=skipped_sessions_str,
+            file_name="skipped_sessions_gambas.txt",
+            mime="text/plain"
+        )
     
     return job_list
 
@@ -221,12 +230,18 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
     processed_sessions = 0
     skipped_sessions = 0
     failed_sessions = 0
+    skipped_sessions_list = []
     status = st.empty()
     st.info(f"🚀 Starting {gearname} job submission.  \n📁 Processing project: {project.label}")
     project_ = fw.projects.find_first(f'label={project.label}')
     project = project_.reload()
     # Loop through subjects and sessions
-    for subject in project.subjects():
+    if st.session_state.debug_mode:
+        subjects = project.subjects()[:4]
+        st.info("⚠️ Debug Mode: Processing only first 4 subjects.")
+    else:
+        subjects = project.subjects()
+    for subject in subjects:
         if not (subject.label.startswith("137-")): #Ensure this does not run on the phantom - waste of resource and nonsense results
             for session in subject.sessions():
                 session = session.reload()
@@ -239,6 +254,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                         if has_completed_seg(session, gear, gambas=True):
                             status.text(f"✅ {gearname} with gambas input already complete, skipping")
                             skipped_sessions += 1
+                            
                             continue
                     
                         # Find the most recent gambas analysis
@@ -254,6 +270,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                                     status.text(f"WARNING: Job cannot be sent. Error: {e}")
 
                             skipped_sessions += 1
+                            
                             continue
         
                         elif gambas_file:
@@ -310,6 +327,8 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                         if not inputfile:
                             status.text(f"⚠️ No suitable T1w acquisition found with label containing '{t1w_label_string}'. Skipping session.")
                             skipped_sessions += 1
+                            #Need to log this
+                            skipped_sessions_list.append(session.label)
                             continue
                         # Submit seg job with T1w input
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
@@ -324,7 +343,15 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
         
     # Summary
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
-
+    #Return CSV with skipped sessions
+    if skipped_sessions_list:
+        skipped_sessions_str = "\n".join(skipped_sessions_list)
+        st.download_button(
+            label="Download Skipped Sessions",
+            data=skipped_sessions_str,
+            file_name="skipped_sessions.txt",
+            mime="text/plain"
+        )
     
     return job_list
 
@@ -640,6 +667,9 @@ fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated 
 
 
 #Have a drop down to select batch runs 
+#Add a message to not refresh the page while the batch job is running
+st.markdown("⚠️ **Please do not refresh the page while the batch job is running to avoid interruptions.**")
+
 st.title("📦 Batch Runs")
 st.write("Select a gear to batch run to view details:")
 # gear_list = fw.gears()
@@ -647,10 +677,12 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["Circumference", "Freesurfer-recon-all", "Recon-all-clinical (gambas)", "Recon-all-clinical (MRR)","GAMBAS", 'Minimorph',"Supersynth (gambas)"]
+gear_names = ["Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
+#Radio button for gambas or MRR input if applicable
+input_type = st.radio("Select input type for segmentation gears:", ("MRR", "GAMBAS"), index=0 if "mrr" in selected_gear.lower() else 1)
 
 #Dropdown to select project
 project_list = fw.projects()
@@ -668,34 +700,52 @@ if selected_gear == "Freesurfer-recon-all":
     #Have user enter i a textbox the string to look for in the acquisition label
     t1w_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
 
+#Add checkbox "debug" to only run on first 2 subjects
+st.session_state.debug_mode =  False
+debug_mode = st.checkbox("Debug Mode (Run on first 4 subjects only)", value=False)
+if debug_mode:
+    st.warning("⚠️ Debug Mode is ON: The batch job will only run on the first 2 subjects of the selected project.")
+    st.session_state.debug_mode = True
 #If you select the gear and project, and click a button, run the batch job
 if st.button("Run Batch Job"):
     st.success(f"Running batch job for gear: {selected_gear} on project: {selected_project.label}")
+    #Prepare dataframe to log job submissions (session variable)
+    st.session_state.job_log = []
+    
+
     if selected_gear == "Circumference":
         run_circumference_gear(fw, fw_project)
 
-    elif selected_gear == "Recon-all-clinical (gambas input)":
-        job_list = run_seg_jobs( fw, fw_project,'recon-all-clinical', gambas=True)
+    elif selected_gear == "Recon-all-clinical":
+        job_list = run_seg_jobs( fw, fw_project,'recon-all-clinical', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
             check_job_status(fw, job_list)
         else:
             st.info("No recon-all-clinical jobs were submitted.")
-    elif selected_gear == "Recon-all-clinical (MRR input)":
-        job_list = run_seg_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
-        if job_list:
-            st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
-            check_job_status(fw, job_list)
-        else:
-            st.info("No recon-all-clinical jobs were submitted.")
+    # elif selected_gear == "Recon-all-clinical (MRR input)":
+    #     job_list = run_seg_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
+    #     if job_list:
+    #         st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
+    #         check_job_status(fw, job_list)
+    #     else:
+    #         st.info("No recon-all-clinical jobs were submitted.")
     elif selected_gear == "infant-freesurfer":
         #Add a true / false checkbox to 
-        job_list = run_seg_jobs(fw, fw_project, 'infant-freesurfer', gambas=False)
+        job_list = run_seg_jobs(fw, fw_project, 'infant-freesurfer', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} infant-freesurfer jobs.")
             check_job_status(fw, job_list)
         else:
             st.info("No infant-freesurfer jobs were submitted.")
+
+    elif selected_gear == "BIBSNET (baby-and-infant-brain-segmentation)":
+        job_list = run_seg_jobs(fw, fw_project, 'baby-and-infant-brain-segmentation', gambas=input_type)
+        if job_list:
+            st.success(f"Submitted {len(job_list)} BIBSNET jobs.")
+            check_job_status(fw, job_list)
+        else:
+            st.info("No BIBSNET jobs were submitted.")
 
     elif selected_gear == "Freesurfer-recon-all":
         #This only takes T1w images
@@ -707,7 +757,7 @@ if st.button("Run Batch Job"):
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
 
-    elif selected_gear=="Supersynth (gambas)":
-        job_list = run_seg_jobs(fw, fw_project, 'supersynth', gambas=True, analysis_tag='gpuplus')
+    elif selected_gear=="Supersynth":
+        job_list = run_seg_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
 
 
