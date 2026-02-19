@@ -216,8 +216,8 @@ def submit_gambas(fw, session):
 
 def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
-    Run recon-all jobs on the most recent gambas analysis for each session
-    if recon-all hasn't already been completed.
+    Run seg jobs on the most recent 'gambas' (or MRR) analysis for each session
+    if segementation hasn't already been completed.
     """
     
     # Configuration
@@ -252,7 +252,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                     ### GAMBAS CHECKS ####
                     if gambas:
                         if has_completed_seg(session, gear, gambas=True):
-                            status.text(f"✅ {gearname} with gambas input already complete, skipping")
+                            status.text(f"✅ {gearname} with gambas input already complete, skipping {session_id}")
                             skipped_sessions += 1
                             
                             continue
@@ -260,7 +260,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                         # Find the most recent gambas analysis
                         gambas_file = find_latest_gambas_file(session)
                         if not gambas_file:
-                            status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job...")
+                            status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job for session {session_id}...")
                             #Add a function to run gambas if nothing has been found
                             job_id = submit_gambas(fw, session)
                             try:
@@ -289,15 +289,21 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                         mrr_matches = [asys for asys in session.analyses if asys.gear_info is not None and asys.gear_info.get('name') == "mrr" and asys.job.get('state') == 'complete']
                         
                         if not mrr_matches:
-                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session.")
+                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
+                            print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
                             skipped_sessions += 1
                             continue
-
-                        last_run_date = max([asys.created for asys in mrr_matches])
-                        last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
-                        last_run_analysis = last_run_analysis[0]
                         
-                        for file in last_run_analysis[0].files:  
+                        last_run_date = max([asys.created for asys in mrr_matches])
+                        
+                        
+                        last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
+
+                        last_run_analysis = last_run_analysis[0]
+                        print(last_run_analysis.label)
+                        print(len(last_run_analysis.files))
+                        for file in last_run_analysis.files:  
+                            print(file.name)
                             if re.search(r'mrr.*\.nii.gz', file.name):
                                 inputfile = file
 
@@ -708,15 +714,20 @@ if debug_mode:
     st.session_state.debug_mode = True
 #If you select the gear and project, and click a button, run the batch job
 if st.button("Run Batch Job"):
-    st.success(f"Running batch job for gear: {selected_gear} on project: {selected_project.label}")
+    st.success(f"Running batch job for gear: {selected_gear} on project: {selected_project.label}, on {input_type} input")
     #Prepare dataframe to log job submissions (session variable)
     st.session_state.job_log = []
     
+    if input_type == "GAMBAS":
+        input_type = 1
+    else:
+        input_type = 0
 
     if selected_gear == "Circumference":
         run_circumference_gear(fw, fw_project)
 
     elif selected_gear == "Recon-all-clinical":
+        
         job_list = run_seg_jobs( fw, fw_project,'recon-all-clinical', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
