@@ -256,6 +256,11 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             skipped_sessions += 1
                             
                             continue
+                        elif has_pending_seg(session, gear, gambas=True):
+                            status.text(f"⏳ {gearname} with gambas input already pending/running, skipping {session_id}")
+                            skipped_sessions += 1
+                            
+                            continue
                     
                         # Find the most recent gambas analysis
                         gambas_file = find_latest_gambas_file(session)
@@ -317,6 +322,11 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             status.text(f"✅ {gearname} already complete, skipping")
                             skipped_sessions += 1
                             continue
+
+                        elif has_pending_seg(session, gear, gambas=False):
+                            status.text(f"⏳ {gearname} already pending/running, skipping")
+                            skipped_sessions += 1
+                            continue
                         
                         # Find T1w acquisition based on label string
                         inputfile = None
@@ -364,7 +374,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
  
 def has_completed_seg(session, gear,gambas=False):
     """
-    Check if session already has a completed recon-all analysis of the target version.
+    Check if session already has a completed segmentation analysis of the target version.
     """
     for analysis in session.analyses:
         if not analysis.gear_info:
@@ -378,6 +388,25 @@ def has_completed_seg(session, gear,gambas=False):
             if gambas and 'gambas' in analysis.label.lower() and job_state == 'complete':
                 return True
             elif not gambas and 'gambas' not in analysis.label.lower() and job_state == 'complete':
+                return True
+    return False
+
+def has_pending_seg(session, gear, gambas=False):
+    """
+    Check if session already has a pending segmentation analysis of the target version.
+    """
+    for analysis in session.analyses:
+        if not analysis.gear_info:
+            continue
+            
+        gear_name = analysis.gear_info.get('name', '').lower()
+        #gear_version = analysis.gear_info.get('version', '')
+        
+        if gear.gear.name in gear_name : #and gear_version == target_version:
+            job_state = analysis.job.get('state') if analysis.job else None
+            if gambas and 'gambas' in analysis.label.lower() and job_state in ['pending', 'running']:
+                return True
+            elif not gambas and 'gambas' not in analysis.label.lower() and job_state in ['pending', 'running']:
                 return True
     return False
  
