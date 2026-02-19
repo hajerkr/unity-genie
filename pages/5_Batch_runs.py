@@ -298,6 +298,11 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
                             skipped_sessions += 1
                             continue
+                    
+                        if has_pending_seg(session, gear, gambas=False):
+                            status.text(f"⏳ {gearname} already pending/running, skipping")
+                            skipped_sessions += 1
+                            continue
                         
                         last_run_date = max([asys.created for asys in mrr_matches])
                         
