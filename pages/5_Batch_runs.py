@@ -317,7 +317,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             if re.search(r'mrr.*\.nii.gz', file.name):
                                 inputfile = file
 
-                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
+                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         job_list.append(job_id)
                         processed_sessions += 1
                         print(f"🚀 Submitted {gearname} job (ID: {job_id})")
@@ -352,7 +352,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             skipped_sessions_list.append(session.label)
                             continue
                         # Submit seg job with T1w input
-                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile)
+                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
 
                    
 
