@@ -742,9 +742,10 @@ if selected_gear == "Freesurfer-recon-all":
 
 #Add checkbox "debug" to only run on first 2 subjects
 st.session_state.debug_mode =  False
-debug_mode = st.checkbox("Debug Mode (Run on first 4 subjects only)", value=False)
+n_subjects_debug = 4
+debug_mode = st.checkbox(f"Debug Mode (Run on first {n_subjects_debug} subjects only)", value=False)
 if debug_mode:
-    st.warning("⚠️ Debug Mode is ON: The batch job will only run on the first 2 subjects of the selected project.")
+    st.warning(f"⚠️ Debug Mode is ON: The batch job will only run on the first {n_subjects_debug} subjects of the selected project.")
     st.session_state.debug_mode = True
 #If you select the gear and project, and click a button, run the batch job
 if st.button("Run Batch Job"):
@@ -802,7 +803,7 @@ if st.button("Run Batch Job"):
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
 
-    elif selected_gear=="Supersynth":
+    elif selected_gear=="SuperSynth":
         job_list = run_seg_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
 
 
