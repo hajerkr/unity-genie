@@ -776,7 +776,7 @@ if st.button("Run Batch Job"):
     #         check_job_status(fw, job_list)
     #     else:
     #         st.info("No recon-all-clinical jobs were submitted.")
-    elif selected_gear == "infant-freesurfer":
+    elif selected_gear == "Infant-freesurfer":
         #Add a true / false checkbox to 
         job_list = run_seg_jobs(fw, fw_project, 'infant-freesurfer', gambas=input_type)
         if job_list:
