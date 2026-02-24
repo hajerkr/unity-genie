@@ -238,7 +238,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
     # Loop through subjects and sessions
     if st.session_state.debug_mode:
         subjects = project.subjects()[:4]
-        st.info("⚠️ Debug Mode: Processing only first 4 subjects.")
+        #st.info("⚠️ Debug Mode: Processing only first 4 subjects.")
     else:
         subjects = project.subjects()
     for subject in subjects:
