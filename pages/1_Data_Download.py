@@ -227,14 +227,13 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
     #### End multithreading ####
 
     ############ Single thread download ############
-    prisma = pd.read_csv('/Users/Hajer/unity/Simone/rerun-list_PRISMA_recon-all.csv')
+    
     for i, session in enumerate(sessions):
         session = session.reload()
         ses_label = session.label
         sub_label = session.subject.label
         print(sub_label, ses_label)
-        # if sub_label not in prisma.Hyperfine_label:
-        #     continue
+        
         
         status.text(f"Fetching {sub_label} - {ses_label}...")
         #Iterate through analyses, looking for both gears if derivative_type is "both"
