@@ -214,7 +214,7 @@ def submit_gambas(fw, session):
 #                     print(f"Exception caught for {subject.label}: ", e)
 
 
-def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
+def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
     Run seg jobs on the most recent 'gambas' (or MRR) analysis for each session
     if segementation hasn't already been completed.
@@ -251,12 +251,12 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                     # Check if gear already completed specifically for gambas input
                     ### GAMBAS CHECKS ####
                     if gambas:
-                        if has_completed_seg(session, gear, gambas=True):
+                        if has_completed_asys(session, gear, gambas=True):
                             status.text(f"✅ {gearname} with gambas input already complete, skipping {session_id}")
                             skipped_sessions += 1
                             
                             continue
-                        elif has_pending_seg(session, gear, gambas=True):
+                        elif has_pending_asys(session, gear, gambas=True):
                             status.text(f"⏳ {gearname} with gambas input already pending/running, skipping {session_id}")
                             skipped_sessions += 1
                             
@@ -299,7 +299,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                             skipped_sessions += 1
                             continue
                     
-                        if has_pending_seg(session, gear, gambas=False):
+                        if has_pending_asys(session, gear, gambas=False):
                             status.text(f"⏳ {gearname} already pending/running, skipping")
                             skipped_sessions += 1
                             continue
@@ -323,12 +323,12 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
                         print(f"🚀 Submitted {gearname} job (ID: {job_id})")
 
                     elif gearname == 'freesurfer-recon-all':
-                        if has_completed_seg(session, gear, gambas=False):
+                        if has_completed_asys(session, gear, gambas=False):
                             status.text(f"✅ {gearname} already complete, skipping")
                             skipped_sessions += 1
                             continue
 
-                        elif has_pending_seg(session, gear, gambas=False):
+                        elif has_pending_asys(session, gear, gambas=False):
                             status.text(f"⏳ {gearname} already pending/running, skipping")
                             skipped_sessions += 1
                             continue
@@ -377,7 +377,7 @@ def run_seg_jobs(fw, project, gearname, gambas=False, include_pattern=None,analy
     return job_list
 
  
-def has_completed_seg(session, gear,gambas=False):
+def has_completed_asys(session, gear,gambas=False):
     """
     Check if session already has a completed segmentation analysis of the target version.
     """
@@ -396,7 +396,7 @@ def has_completed_seg(session, gear,gambas=False):
                 return True
     return False
 
-def has_pending_seg(session, gear, gambas=False):
+def has_pending_asys(session, gear, gambas=False):
     """
     Check if session already has a pending segmentation analysis of the target version.
     """
@@ -717,7 +717,7 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
+gear_names = ["QA","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
@@ -763,14 +763,14 @@ if st.button("Run Batch Job"):
 
     elif selected_gear == "Recon-all-clinical":
         
-        job_list = run_seg_jobs( fw, fw_project,'recon-all-clinical', gambas=input_type)
+        job_list = run_jobs( fw, fw_project,'recon-all-clinical', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
             check_job_status(fw, job_list)
         else:
             st.info("No recon-all-clinical jobs were submitted.")
     # elif selected_gear == "Recon-all-clinical (MRR input)":
-    #     job_list = run_seg_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
+    #     job_list = run_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
     #     if job_list:
     #         st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
     #         check_job_status(fw, job_list)
@@ -778,7 +778,7 @@ if st.button("Run Batch Job"):
     #         st.info("No recon-all-clinical jobs were submitted.")
     elif selected_gear == "Infant-freesurfer":
         #Add a true / false checkbox to 
-        job_list = run_seg_jobs(fw, fw_project, 'infant-freesurfer', gambas=input_type)
+        job_list = run_jobs(fw, fw_project, 'infant-freesurfer', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} infant-freesurfer jobs.")
             check_job_status(fw, job_list)
@@ -786,7 +786,7 @@ if st.button("Run Batch Job"):
             st.info("No infant-freesurfer jobs were submitted.")
 
     elif selected_gear == "BIBSNET (baby-and-infant-brain-segmentation)":
-        job_list = run_seg_jobs(fw, fw_project, 'baby-and-infant-brain-segmentation', gambas=input_type)
+        job_list = run_jobs(fw, fw_project, 'baby-and-infant-brain-segmentation', gambas=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} BIBSNET jobs.")
             check_job_status(fw, job_list)
@@ -798,12 +798,15 @@ if st.button("Run Batch Job"):
         #Have user enter i a textbox the string to look for in the acquisition label
         #t1w_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
         if t1w_label_string.strip() is not "":
-            job_list = run_seg_jobs(fw, fw_project, 'freesurfer-recon-all', gambas=False)
+            job_list = run_jobs(fw, fw_project, 'freesurfer-recon-all', gambas=False)
 
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
 
     elif selected_gear=="SuperSynth":
-        job_list = run_seg_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
+        job_list = run_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
 
-
+    elif selected_gear=="QA":
+        job_list = run_jobs(fw, fw_project, 'qa', gambas=input_type, analysis_tag='qa')
+    else:
+        job_list = run_jobs(fw, fw_project, selected_gear.lower(), gambas=input_type)
