@@ -89,131 +89,6 @@ def submit_gambas(fw, session):
         except Exception as e:
             status.text(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
 
-
-# def run_segmentation(project, gearname, gambas=False):
-#     gear =  fw.lookup(f'gears/{gearname}')
-    
-#     # Initialize gear_job_list
-#     job_list = list()
-
-#     for subject in project.subjects():
-#         subject = subject.reload()
-#         for session in subject.sessions():
-#             session = session.reload()
-#             segmentation = [asys for asys in session.analyses if asys.gear_info is not None and asys.gear_info.get('name') == gearname and asys.job.get('state') == 'complete']
-
-#             if segmentation:
-#                 status.text(f"Skipping {session.label} as {gearname} has already been run.")
-                
-#             analysis_tag = gearname
-#             inputfile = None
-#             status.text("Parsing... ", subject.label, session.label)
-
-#             inputs = {}
-#             analyses = session.analyses
-
-#             try:
-#                 mrr_matches = [asys for asys in analyses if asys.gear_info is not None and asys.gear_info.get('name') == "mrr" and asys.job.get('state') == 'complete' and "mrr_T2w_MNI1.5mm" in asys.label]
-#                 #gambas_matches =  [asys for asys in analyses if "gambas" in asys.label]
-#                 if gearname == "freesurfer-recon-all":
-#                     #Get nifti file in acquisition ending in _ses-GE_T2w
-#                     print("Finding the MPRAGE acq")
-#                     #Get aqcuiqisitons that have T1w and end with RMS
-#                     for acquisition in session.acquisitions():
-#                         acquisition = acquisition.reload()
-#                         for file in acquisition.files:
-#                             if acquisition.label.endswith('RMS') and file.type == 'nifti':
-#                                 inputfile = file
-#                                 print(inputfile.name)
-#                                 analysis_tag = f'{gearname}-T1w-RMS'
-                    
-#                     # acquisition = session.acquisitions.find_first(f"label={subject.label}_{session.label}_acq-iso_T1w")
-#                     # if acquisition is None:
-#                     #     print(f"No acquisition found for {subject.label}_{session.label}_acq-iso_T1w")
-#                     #     continue
-#                     # acquisition = acquisition.reload()
-#                     # for file in acquisition.files:
-#                     #     if file.type == "nifti":
-#                     #         inputfile = file
-#                     #         print(inputfile.name)
-#                     #         analysis_tag = f'{gearname}-iso_T1w'
-
-#                 else:
-                        
-#                     for matches in [mrr_matches]:
-#                         # If there are no matches, the gear didn't run
-#                         if len(matches) == 0:
-#                             run = 'False'
-                        
-#                         # If there is one match, that's our target
-#                         elif len(matches) == 1:
-#                             run = 'True'
-#                             #status = matches[0].job.get('state')
-                            
-
-#                             for file in matches[0].files:  
-#                                 if re.search(r'mrr.*\.nii.gz', file.name):
-#                                     inputfile = file
-#                                     print(inputfile.name)
-#                                     analysis_tag = f'{gearname}-mrr-axireg'
-#                                 elif re.search(r'ResCNN.*\.nii.gz', file.name):
-#                                     inputfile = file
-#                                     print(inputfile.name)
-#                                     analysis_tag = f'{gearname}-gambas-1.5mm'
-                                    
-#                         else:
-#                                 #consider gambas as well as recon-all
-#                                 last_run_date = max([asys.created for asys in matches])
-#                                 last_run_analysis = [asys for asys in matches if asys.created == last_run_date]
-
-#                                 # There should only be one exact match
-#                                 last_run_analysis = last_run_analysis[0]
-
-#                                 run = 'True'
-#                                 #status = last_run_analysis.job.get('state')
-                                
-#                                 for file in matches[0].files:  
-#                                     if re.search(r'mrr.*\.nii.gz', file.name):
-#                                         inputfile = file
-#                                         print(inputfile.name)
-#                                         analysis_tag = f'{gearname}-mrr-axireg'
-#                                     elif re.search(r'ResCNN.*\.nii.gz', file.name):
-#                                         inputfile = file
-#                                         print(inputfile.name)
-#                                         analysis_tag = f'{gearname}-gambas-1.5mm'
-                                
-#                     if inputfile:
-#                         inputs["anatomical"]= inputfile
-#                         print("Input file" , inputfile.name)
-
-#                         try:
-#                             # The destination for this analysis will be on the session
-#                             target_template = 'None'
-#                             dest = session
-#                             time_fmt = '%d-%m-%Y_%H-%M-%S'
-
-#                             analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
-#                             if not recon_all:
-#                                 job_id = gear.run(
-#                                     analysis_label=analysis_label,
-#                                     inputs=inputs,
-#                                     destination=dest,
-#                                     tags=['priority', gearname],
-#                                     config={
-#                                         #"target_template": "3M",
-#                                         # "age": "3M"
-#                                     }
-#                                 )
-#                                 job_list.append(job_id)
-
-#                             print("Submitting Job: Check Jobs Log", dest.label)
-#                         except Exception as e:
-#                             print(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
-
-#             except Exception as e:
-#                     print(f"Exception caught for {subject.label}: ", e)
-
-
 def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
     Run seg jobs on the most recent 'gambas' (or MRR) analysis for each session
@@ -248,20 +123,20 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                 session_id = f"{project.label}/{subject.label}/{session.label}"
                 status.text(f"\n🔍 Checking session: {session_id} for subject {subject.label}")
                 try:
-                    # Check if gear already completed specifically for gambas input
+                    # Check if gear already completed specifically for this input, or has a submitted job already
+                    if has_completed_asys(session, gear, gambas=gambas):
+                            status.text(f"✅ {gearname} with this input already complete, skipping {session_id}")
+                            skipped_sessions += 1
+                            
+                            continue
+                    elif has_pending_asys(session, gear, gambas=gambas):
+                        status.text(f"⏳ {gearname} with this input already pending/running, skipping {session_id}")
+                        skipped_sessions += 1
+                        
+                        continue
+                    
                     ### GAMBAS CHECKS ####
                     if gambas:
-                        if has_completed_asys(session, gear, gambas=True):
-                            status.text(f"✅ {gearname} with gambas input already complete, skipping {session_id}")
-                            skipped_sessions += 1
-                            
-                            continue
-                        elif has_pending_asys(session, gear, gambas=True):
-                            status.text(f"⏳ {gearname} with gambas input already pending/running, skipping {session_id}")
-                            skipped_sessions += 1
-                            
-                            continue
-                    
                         # Find the most recent gambas analysis
                         gambas_file = find_latest_gambas_file(session)
                         if not gambas_file:
@@ -280,7 +155,6 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
         
                         elif gambas_file:
                             print(f"✅ Found gambas file: {gambas_file.name}")
-                        
                             # Submit seg job
                             job_id = submit_seg_job(gear, session, gambas=True, input_file=gambas_file, analysis_tag=analysis_tag)
                             job_list.append(job_id)
@@ -299,21 +173,13 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             skipped_sessions += 1
                             continue
                     
-                        if has_pending_asys(session, gear, gambas=False):
-                            status.text(f"⏳ {gearname} already pending/running, skipping")
-                            skipped_sessions += 1
-                            continue
-                        
-                        last_run_date = max([asys.created for asys in mrr_matches])
-                        
-                        
+                        last_run_date = max([asys.created for asys in mrr_matches])                        
                         last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
-
                         last_run_analysis = last_run_analysis[0]
-                        print(last_run_analysis.label)
-                        print(len(last_run_analysis.files))
+                        # print(last_run_analysis.label)
+                        # print(len(last_run_analysis.files))
                         for file in last_run_analysis.files:  
-                            print(file.name)
+                            # print(file.name)
                             if re.search(r'mrr.*\.nii.gz', file.name):
                                 inputfile = file
 
@@ -322,16 +188,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         processed_sessions += 1
                         print(f"🚀 Submitted {gearname} job (ID: {job_id})")
 
-                    elif gearname == 'freesurfer-recon-all':
-                        if has_completed_asys(session, gear, gambas=False):
-                            status.text(f"✅ {gearname} already complete, skipping")
-                            skipped_sessions += 1
-                            continue
-
-                        elif has_pending_asys(session, gear, gambas=False):
-                            status.text(f"⏳ {gearname} already pending/running, skipping")
-                            skipped_sessions += 1
-                            continue
+                    elif gearname == 'freesurfer-recon-all':                     
                         
                         # Find T1w acquisition based on label string
                         inputfile = None
@@ -353,9 +210,6 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             continue
                         # Submit seg job with T1w input
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
-
-                   
-
                         
                 except Exception as e:
                     status.text(f"❌ Error processing session {session_id}: {str(e)}")
@@ -515,13 +369,14 @@ def submit_seg_job(gear, session, input_file, gambas=False,analysis_tag=None):
     #Set up config according to the gear submitted
     config = {}
     if gear_name =="minimorph":
-        config= {"age": None}
+        config= {"age": "None"}
     elif gear_name == "infant-freesurfer":
         config = {
         "newborn": False,
         "age": None
         }
    
+    print(config)
     # Submit the job
     job_id = gear.run(
         analysis_label=analysis_label,
