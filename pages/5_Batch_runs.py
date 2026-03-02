@@ -20,7 +20,7 @@ def run_gambas_jobs(fw, project):
             skipped_sessions += 1
             continue
 
-        job_id = submit_gambas(fw, session)
+        job_id = submit_job(fw, session,"gambas")
         if job_id:
             job_list.append(job_id)
             processed_sessions += 1
@@ -47,12 +47,13 @@ def run_gambas_jobs(fw, project):
     return job_list
 
 
-def submit_gambas(fw, session):
+def submit_job(fw, session,gearname):
 
     inputs = {}
-    EXCLUDE_PATTERNS = ['Segmentation', 'Align', 'Mapping']
+    EXCLUDE_PATTERNS = ['Segmentation', 'Align', 'Mapping',"Localizer","Gray_White"]
     INCLUDE_PATTERN = 'T2'
-    PLANE_TYPES = ['AXI']
+    # PLANE_TYPES = ['AXI']
+    GEAR_PLANE_TYPES = {"gambas": ['AXI'], "qa": ['AXI','SAG','COR']}
     status = st.empty()
     # Look at every acquisition in the session
     for acquisition in session.acquisitions.iter():
@@ -61,33 +62,33 @@ def submit_gambas(fw, session):
         # We only want anatomical Nifti's
             if file.type == 'nifti' and INCLUDE_PATTERN in file.name:
                 if all(pattern not in file.name for pattern in EXCLUDE_PATTERNS):
-                    for plane in PLANE_TYPES:
+                    for plane in GEAR_PLANE_TYPES.get(gearname):
                         if plane in file.name:
                             inputs["input"] = file
                             break
-    if inputs:                           
-        try:
-        # The destination for this analysis will be on the session
-            dest = session
-            gear_gambas = fw.lookup('gears/gambas')
-            time_fmt = '%d-%m-%Y_%H-%M-%S'
-            analysis_tag = 'gambas'
-            analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
-            job_id = gear_gambas.run(
-                analysis_label=analysis_label,
-                inputs=inputs,
-                destination=dest,
-                tags=['batch'],
-                config={
-                
-                    # "prefix": analysis_tag,
-                }
-            )
+        if inputs:                           
+            try:
+            # The destination for this analysis will be on the session
+                dest = session
+                gear = fw.lookup(f'gears/{gearname}')
+                time_fmt = '%d-%m-%Y_%H-%M-%S'
+                analysis_tag = gearname
+                analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
+                job_id = gear.run(
+                    analysis_label=analysis_label,
+                    inputs=inputs,
+                    destination=dest,
+                    tags=['batch'],
+                    config={
+                    
+                        # "prefix": analysis_tag,
+                    }
+                )
 
-            return job_id
-            
-        except Exception as e:
-            status.text(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
+                return job_id
+                
+            except Exception as e:
+                status.text(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
 
 def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
@@ -135,14 +136,21 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         
                         continue
                     
+                    if gearname=="qa":
+                        job_id =  submit_job(fw, session, gearname)
+                        job_list.append(job_id)
+                        processed_sessions += 1
+                        status.text(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
+                        print(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
+                        
                     ### GAMBAS CHECKS ####
-                    if gambas:
+                    elif gambas:
                         # Find the most recent gambas analysis
                         gambas_file = find_latest_gambas_file(session)
                         if not gambas_file:
                             status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job for session {session_id}...")
                             #Add a function to run gambas if nothing has been found
-                            job_id = submit_gambas(fw, session)
+                            job_id = submit_job(fw, session,"gambas")
                             try:
                                 job_list.append(job_id)
                                 status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
@@ -369,7 +377,19 @@ def submit_seg_job(gear, session, input_file, gambas=False,analysis_tag=None):
     #Set up config according to the gear submitted
     config = {}
     if gear_name =="minimorph":
-        config= {"age": "None"}
+        if "36M" in session.subject.label:
+                config = {"age": '24M'}
+        elif "24M" in session.subject.label:
+                config = {"age": '24M'}
+        elif "12M" in session.subject.label:
+                config = {"age": '12M'}
+        elif "6M" in session.subject.label:
+                config = {"age": '6M'}
+        elif "3M" in session.subject.label:
+                config = {"age": '3M'}
+        else:
+            config= {"age": "None"}
+            
     elif gear_name == "infant-freesurfer":
         config = {
         "newborn": False,
