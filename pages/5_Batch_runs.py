@@ -33,6 +33,10 @@ def run_gambas_jobs(fw, project):
 
 
     # Summary
+    # Flatten job_list if it contains nested lists
+    if any(isinstance(i, list) for i in job_list):
+        job_list = [job for sublist in job_list for job in sublist]
+
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
     #Return CSV with skipped sessions
     if failed_sessions_list.append(session.label):
@@ -615,7 +619,7 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["QA","MRIQC","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
+gear_names = ["QA","MRIQC","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
@@ -673,13 +677,15 @@ if st.button("Run Batch Job"):
             check_job_status(fw, job_list)
         else:
             st.info("No recon-all-clinical jobs were submitted.")
-    # elif selected_gear == "Recon-all-clinical (MRR input)":
-    #     job_list = run_jobs(fw, fw_project, 'recon-all-clinical', gambas=False)
-    #     if job_list:
-    #         st.success(f"Submitted {len(job_list)} recon-all-clinical jobs.")
-    #         check_job_status(fw, job_list)
-    #     else:
-    #         st.info("No recon-all-clinical jobs were submitted.")
+
+    elif selected_gear == "Recon-any":
+        job_list = run_jobs( fw, fw_project,'recon-any', gambas=input_type)
+        if job_list:
+            st.success(f"Submitted {len(job_list)} recon-any jobs.")
+            check_job_status(fw, job_list)
+        else:
+            st.info("No recon-any jobs were submitted.")
+
     elif selected_gear == "Infant-freesurfer":
         #Add a true / false checkbox to 
         job_list = run_jobs(fw, fw_project, 'infant-freesurfer', gambas=input_type)
