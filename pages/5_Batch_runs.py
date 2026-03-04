@@ -49,14 +49,17 @@ def run_gambas_jobs(fw, project):
 
 def submit_job(fw, session,gearname):
 
-    inputs = {}
+    
     EXCLUDE_PATTERNS = ['Segmentation', 'Align', 'Mapping',"Localizer","Gray_White"]
     INCLUDE_PATTERN = 'T2'
     # PLANE_TYPES = ['AXI']
-    GEAR_PLANE_TYPES = {"gambas": ['AXI'], "qa": ['AXI','SAG','COR']}
+    GEAR_PLANE_TYPES = {"gambas": ['AXI'], "qa": ['AXI','SAG','COR'],"mriqc": ['AXI','SAG','COR']}
     status = st.empty()
+    job_ids = []
     # Look at every acquisition in the session
     for acquisition in session.acquisitions.iter():
+        inputs = {}
+        print(f"Checking acquisition: {acquisition.label}...")
         acquisition = acquisition.reload()
         for file in acquisition.files:
         # We only want anatomical Nifti's
@@ -69,26 +72,46 @@ def submit_job(fw, session,gearname):
         if inputs:                           
             try:
             # The destination for this analysis will be on the session
-                dest = session
+                dest = acquisition
                 gear = fw.lookup(f'gears/{gearname}')
                 time_fmt = '%d-%m-%Y_%H-%M-%S'
                 analysis_tag = gearname
                 analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
-                job_id = gear.run(
-                    analysis_label=analysis_label,
-                    inputs=inputs,
-                    destination=dest,
-                    tags=['batch'],
-                    config={
+                if gearname == "mriqc": #Not analysis gear, so do not include analysis label
+                    inputs["nifti"] = inputs.pop("input") #Rename input to nifti for mriqc
+                    job_id = gear.run(
+    
+                        inputs=inputs,
+                        destination=dest,
+                        tags=['batch','qc'],
+                        config={
+                                "measurement": "auto-detect",
+                                "save_derivatives": True,
+                                "save_outputs": True,
+                                "verbose_reports": True,
+                                "include_rating_widget": True
+                            }
+                    )
+                else:
                     
-                        # "prefix": analysis_tag,
-                    }
-                )
-
-                return job_id
+                    job_id = gear.run(
+                        analysis_label=analysis_label,
+                        inputs=inputs,
+                        destination=dest,
+                        tags=['batch'],
+                        config={
+                        
+                            # "prefix": analysis_tag,
+                        }
+                    )
+                
+                
+                job_ids.append(job_id)
+                # return job_id
                 
             except Exception as e:
                 status.text(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
+    return job_ids
 
 def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_tag=None):
     """
@@ -136,9 +159,9 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         
                         continue
                     
-                    if gearname=="qa":
+                    if gearname in ["qa","mriqc"]:
                         job_id =  submit_job(fw, session, gearname)
-                        job_list.append(job_id)
+                        job_list.extend(job_id)
                         processed_sessions += 1
                         status.text(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
                         print(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
@@ -592,12 +615,18 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["QA","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
+gear_names = ["QA","MRIQC","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
 #Radio button for gambas or MRR input if applicable
-input_type = st.radio("Select input type for segmentation gears:", ("MRR", "GAMBAS"), index=0 if "mrr" in selected_gear.lower() else 1)
+
+# Only show radio button if selected gear is not QA
+if selected_gear_name not in ["QA","MRIQC","Freesurfer-recon-all"] :
+    input_type = st.radio("Select input type for segmentation gears:", ("MRR", "GAMBAS"), index=0 if "mrr" in selected_gear.lower() else 1)
+else:
+    input_type = None  # or set a default value if your downstream code needs it
+
 
 #Dropdown to select project
 project_list = fw.projects()
@@ -681,7 +710,9 @@ if st.button("Run Batch Job"):
     elif selected_gear=="SuperSynth":
         job_list = run_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
 
-    elif selected_gear=="QA":
-        job_list = run_jobs(fw, fw_project, 'qa', gambas=input_type, analysis_tag='qa')
+    elif selected_gear in ["QA","MRIQC"]:
+        #Hide input type buttons
+        job_list = run_jobs(fw, fw_project, selected_gear.lower(), gambas=input_type, analysis_tag=selected_gear.lower())
+    
     else:
         job_list = run_jobs(fw, fw_project, selected_gear.lower(), gambas=input_type)
