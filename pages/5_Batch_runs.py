@@ -4,6 +4,15 @@ import os
 import re
 from datetime import datetime
 
+def is_complete_mrr(asys):
+    return (
+        asys.gear_info is not None
+        and asys.gear_info.get('name') == "mrr"
+        and asys.job is not None
+        and asys.job.get('state') == 'complete'
+    )
+
+
 def run_gambas_jobs(fw, project):
     job_list = []
     processed_sessions = 0
@@ -138,18 +147,20 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
     st.info(f"🚀 Starting {gearname} job submission.  \n📁 Processing project: {project.label}")
     project_ = fw.projects.find_first(f'label={project.label}')
     project = project_.reload()
-    # Loop through subjects and sessions
+    # Loop through sessions
     if st.session_state.debug_mode:
-        subjects = project.subjects()[:4]
-        #st.info("⚠️ Debug Mode: Processing only first 4 subjects.")
+        sessions = project.sessions()[:4]
+        #st.info("⚠️ Debug Mode: Processing only first 4 sessions.")
     else:
-        subjects = project.subjects()
-    for subject in subjects:
-        if not (subject.label.startswith("137-")): #Ensure this does not run on the phantom - waste of resource and nonsense results
-            for session in subject.sessions():
+        sessions = project.sessions()
+
+    for session in sessions:
+        if not (session.subject.label.startswith("137-")): #Ensure this does not run on the phantom - waste of resource and nonsense results
+            # for session in subject.sessions():
                 session = session.reload()
-                session_id = f"{project.label}/{subject.label}/{session.label}"
-                status.text(f"\n🔍 Checking session: {session_id} for subject {subject.label}")
+                session_id = f"{project.label}/{session.subject.label}/{session.label}"
+                status.text(f"\n🔍 Checking session: {session_id} for subject {session.subject.label}")
+                print(f"\n🔍 Checking session: {session_id} for subject {session.subject.label}")
                 try:
                     # Check if gear already completed specifically for this input, or has a submitted job already
                     if has_completed_asys(session, gear, gambas=gambas):
@@ -199,14 +210,22 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                     ### MRR CHECKS ####
                     elif not gambas and gearname != 'freesurfer-recon-all':
                         # Submit seg job without MRR input
-                        inputfile = None
-                        mrr_matches = [asys for asys in session.analyses if asys.gear_info is not None and asys.gear_info.get('name') == "mrr" and asys.job.get('state') == 'complete']
                         
+                        inputfile = None
+                        mrr_matches = [asys for asys in session.analyses if is_complete_mrr(asys)]
+                       
                         if not mrr_matches:
-                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
-                            print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
-                            skipped_sessions += 1
-                            continue
+                            for acq in session.acquisitions():
+                                acq = acq.reload()
+                                mrr_matches = [asys for asys in acq.analyses if is_complete_mrr(asys)]
+                                if mrr_matches:
+                                    break
+
+                            if not mrr_matches:
+                                status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
+                                print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
+                                skipped_sessions += 1
+                                continue
                     
                         last_run_date = max([asys.created for asys in mrr_matches])                        
                         last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
@@ -648,12 +667,12 @@ if selected_gear == "Freesurfer-recon-all":
     #Have user enter i a textbox the string to look for in the acquisition label
     t1w_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
 
-#Add checkbox "debug" to only run on first 2 subjects
+#Add checkbox "debug" to only run on first 2 sessions
 st.session_state.debug_mode =  False
-n_subjects_debug = 4
-debug_mode = st.checkbox(f"Debug Mode (Run on first {n_subjects_debug} subjects only)", value=False)
+n_sessions_debug = 4
+debug_mode = st.checkbox(f"Debug Mode (Run on first {n_sessions_debug} sessions only)", value=False)
 if debug_mode:
-    st.warning(f"⚠️ Debug Mode is ON: The batch job will only run on the first {n_subjects_debug} subjects of the selected project.")
+    st.warning(f"⚠️ Debug Mode is ON: The batch job will only run on the first {n_sessions_debug} sessions of the selected project.")
     st.session_state.debug_mode = True
 #If you select the gear and project, and click a button, run the batch job
 if st.button("Run Batch Job"):
