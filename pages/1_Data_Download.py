@@ -22,461 +22,156 @@ import concurrent.futures
 # from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
 
-# def download_session_data(project,session,project_path,segtool,timestampFilter,work_dir,keywords):
-    # session = session.reload()
-    # ses_label = session.label
-    # sub_label = session.subject.label
-    # print(sub_label, ses_label)
-    # #status.text(f"Fetching {sub_label} - {ses_label}...")
-    # #Iterate through analyses, looking for both gears if derivative_type is "both"
-    # analyses = [a for a in session.analyses if a.gear_info is not None and a.gear_info.name in segtool and a.created > timestampFilter] #and a.gear_info.version in gear_versions
-    # if st.session_state.input_source == "MRR":
-    #     #Exclude analyses where session.acquisition.label contains "gambas" (case insensitive)
-    #     analyses = [a for a in analyses if all("gambas" not in acq.label.lower() for acq in session.acquisitions())]
-    # elif st.session_state.input_source == "Enhanced (Gambas)":
-    #     #Only include analyses where session.acquisition.label contains "gambas" (case insensitive)
-    #     analyses = [a for a in analyses if any("gambas" in acq.label.lower() for acq in session.acquisitions())]
-
-    # for analysis in analyses:
-    #     # if analysis.gear_info is not None and analysis.gear_info.name == segtool and analysis.created > timestampFilter and analysis.gear_info.version in gear_versions: # and analysis.gear_info.version == gearVersion and analysis.get("job").get("state") == "complete"
-    #     # print("pulling: ", segtool, gearVersion)
-    #     #st.write(f"Found {segtool} {analysis.gear_info.version} for {sub_label} - {ses_label}")
-    #     gear = analysis.gear_info.name
-
-    #     with open(os.path.join(work_dir, '..', "utils","columns.yml"),"r") as f:
-    #         tool_map = yaml.load(f, Loader=yaml.SafeLoader)
-    #         volumetric_cols = tool_map[gear]
-    #     print(st.session_state.df)
-    #     for analysis_file in analysis.files:
-    #         for keyword in keywords:
-    #             if keyword in analysis_file.name:
-    #                 file = analysis_file
-    #                 file = file.reload()
-    #                 # Sanitize our filename and parent path
-    #                 download_dir = pv.sanitize_filepath(project_path/sub_label/ses_label,platform='auto')   
-    #                 fileName = file.name #(analysis.gear_info.name + "_" + analysis.label + ".csv")
-
-    #                 # Create the path
-    #                 if not download_dir.exists():
-    #                     download_dir.mkdir(parents=True)
-    #                 download_path = download_dir/fileName
-    #                 print(download_path)
-
-    #                 # Download the file
-    #                 print('Downloading file', ses_label, analysis.label)
-    #                 file.download(download_path)
-
-    #                 # Add subject to dataframe
-    #                 results = pd.read_csv(download_path) 
-    #                 #Insert session.tags as a new column after 'session'
-    #                 print(session.tags)
-    #                 results.insert(3, 'session_qc', session.tags[-1] if session.tags else 'n/a')
-    #                 #If age is empty or NaN, replace with subject.age
-    #                 # age_source = 'custom_info'
-    #                 # age =  session.info.get('childTimepointAge_months',"n/a")
-    #                 # if 'age' in results.columns:
-    #                 #     if any(age not in [None, 0, "0"] for age in [session.info.get('childTimepointAge_months',None), session.info.get('age_at_scan_months',None)]):
-    #                 #         age_source = 'custom_info'
-    #                 #         age =  session.info.get('childTimepointAge_months')
-                            
-    #                 #         results['age'] = (
-    #                 #                         results['age']
-    #                 #                         .replace([0, "0", ""], np.nan)  # normalize "empty" values
-    #                 #                         .fillna(age)                    # fill NaNs with session age
-    #                 #                     )
-    #                 #         #For those change, set 'age_source' with value 'custom_info'
-                            
-    #                 #         #Account for if age_source does not exist
-    #                 #         if 'age_source' not in results.columns:
-    #                 #             results['age_source'] = 'n/a'
-    #                 #         results['age_source'] = results.apply(lambda row: age_source if row['age'] == age else row['age_source'], axis=1)
-    #                 results["age_source"] = "custom_info"
-    #                 results["age"] = session.info.get('childTimepointAge_months', results.get("age","n/a"))
-    #                 results["sex"] = session.info.get('childBiologicalSex', 'n/a')
-    #                 results["project"] = project.label
-    #                 #Get analysis id
-                    
-    #                 #Instead of blindly appending, ensure differences in columns are handled
-    #                 #Drop "Unnamed" columns if they exist
-    #                 results = results.loc[:, ~results.columns.str.contains('^Unnamed')]                                
-    #                 #Add analysis.gear_info.version in the results dataframe after the 'session' column
-    #                 results.insert(0, f'gear_v', analysis.gear_info.version) #analysis.gear_info.name + "/"+
-    #                 #If segmentation tool is minimorph, add prefix mm_ to the volumetric columns
-    #                 if gear == "minimorph":
-    #                     results["analysis_id_mm"] = analysis.id
-    #                     results.rename(columns={col: f'mm_{col}' for col in volumetric_cols if col in results.columns}, inplace=True)
-    #                 else:
-    #                     results["analysis_id_ra"] = analysis.id
-    #                     results.columns = results.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
-    #                     results.rename(columns={col: f'ra_{col}' for col in volumetric_cols if col in results.columns}, inplace=True)
-
-    #                 #st.dataframe(results)
-    #                 if gear == "recon-all-clinical":
-    #                     #If session and acquisition combo already exists in st.session_state.df, only keep the latest version based on the gear version
-    #                     if not st.session_state.df.empty:
-    #                         existing = st.session_state.df[(st.session_state.df['subject'] == sub_label) & (st.session_state.df['session'] == ses_label) & (st.session_state.df['acquisition'] == results['acquisition'].iloc[0])]
-    #                         if not existing.empty:
-    #                             existing_version = existing[f'gear_v'].iloc[0]
-    #                             if version.parse(analysis.gear_info.version) <= version.parse(existing_version):
-    #                                 #status.text(f"Skipping {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-    #                                 print(f"Skipping {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-
-    #                                 continue
-    #                             else:
-    #                                 #Drop the existing row
-    #                                 st.session_state.df = st.session_state.df.drop(existing.index)
-    #                                 print(f"Replacing {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} with newer version {analysis.gear_info.version}")
-    #                                 #status.text(f"Replacing {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} with newer version {analysis.gear_info.version}")
-    #                     #Merge results with st.session_state.df on project, subject, session, acquisition, age, age_source 
-    #                     if st.session_state.df.empty:
-    #                         st.session_state.df = results
-
-    #                     st.session_state.df = pd.merge(st.session_state.df, results, how='outer', on=results.columns.intersection(st.session_state.df.columns).tolist())
-    #                     #st.session_state.df = pd.concat([st.session_state.df, results], ignore_index=True)
-    #                     #st.dataframe(st.session_state.df)
-
-    #                 elif gear == "minimorph":
-    #                     if not st.session_state.df2.empty:
-    #                         existing = st.session_state.df2[(st.session_state.df2['subject'] == sub_label) & (st.session_state.df2['session'] == ses_label) & (st.session_state.df2['acquisition'] == results['acquisition'].iloc[0])]
-    #                         if not existing.empty:
-    #                             existing_version = existing[f'gear_v'].iloc[0]
-    #                             if version.parse(analysis.gear_info.version) <= version.parse(existing_version) : #existing_version >= analysis.gear_info.version:
-    #                                 #status.text(f"Skipping {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-    #                                 print(f"Skipping {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-
-    #                                 continue
-    #                             else:
-    #                                 #Drop the existing row
-    #                                 st.session_state.df2 = st.session_state.df2.drop(existing.index)
-    #                                 #status.text(f"Replacing {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} with newer version {analysis.gear_info.version} (previously {existing_version})")
-    #                                 print(f"Replacing {sub_label} - {ses_label} - {results['acquisition'].iloc[0]} with newer version {analysis.gear_info.version} (previously {existing_version})")
-
-    #                     st.session_state.df2 = pd.concat([st.session_state.df2, results], ignore_index=True)
-
-    #                 #Delete the file after reading it in
-    #                 os.remove(download_path)
-
-def download_derivatives(project_id, segtool, input_source, keywords, timestampFilter,fw):
+def download_session_data(project, session, project_path, segtool, input_source, keywords, work_dir, tool_map):
     """
-    Download derivative files from Flywheel analyses based on specified criteria.
-    Parameters:
-    - project_id: The Flywheel project ID to search within.
-    - derivative_type: The type of derivative to look for (e.g., 'recon-all-clinical', 'minimorph').
-    Returns:
-    - outdir: Path to the compiled CSV file containing results.
+    Returns a single DataFrame row (or few rows) representing this session,
+    with all gear/keyword CSVs merged horizontally.
+    Returns None if nothing was found.
     """
+    session = session.reload()
+    ses_label = session.label
+    sub_label = session.subject.label
 
-    # config = dotenv_values(os.path.join(Path(__file__).parent/".."), ".env")
+    analyses = [
+        a for a in session.analyses
+        if a.gear_info is not None and a.gear_info.name in segtool
+    ]
 
-    if timestampFilter is None:
-        timestampFilter = datetime(2020, 1, 1, 0, 0, 0, 0, pytz.UTC)
+    if input_source == "MRR":
+        analyses = [a for a in analyses if all("gambas" not in acq.label.lower() for acq in session.acquisitions())]
+    elif input_source == "Enhanced (Gambas)":
+        analyses = [a for a in analyses if any("gambas" in acq.label.lower() for acq in session.acquisitions())]
+
+    # Keep only latest analysis per tool
+    analyses_filtered = []
+    for tool in segtool:
+        tool_analyses = [a for a in analyses if a.gear_info.name == tool]
+        if tool_analyses:
+            analyses_filtered.append(max(tool_analyses, key=lambda a: a.created))
+
+    session_df = pd.DataFrame()  # will accumulate horizontally across gears/keywords
+
+    for analysis in analyses_filtered:
+        gear = analysis.gear_info.name
+        volumetric_cols = tool_map[gear]
+
+        for analysis_file in analysis.files:
+            for keyword in keywords:
+                if keyword not in analysis_file.name:
+                    continue
+
+                # Download
+                file = analysis_file.reload()
+                download_dir = pv.sanitize_filepath(project_path / sub_label / ses_label, platform='auto')
+                download_dir.mkdir(parents=True, exist_ok=True)
+                download_path = download_dir / file.name
+                file.download(download_path)
+
+                df = pd.read_csv(download_path)
+                os.remove(download_path)
+
+                # Clean and enrich
+                df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+                df.insert(3, 'session_qc', session.tags[-1] if session.tags else 'n/a')
+                df["age"]        = session.info.get('childTimepointAge_months', df.get("age", "n/a"))
+                df["age_source"] = "custom_info"
+                df["sex"]        = session.info.get('childBiologicalSex', 'n/a')
+                df["project"]    = project.label
+                df.insert(0, 'gear_v', analysis.gear_info.version)
+
+                # Prefix volumetric columns and tag with gear metadata
+                if gear == "minimorph":
+                    df["analysis_id_mm"]   = analysis.id
+                    df["gear_v_minimorph"] = analysis.gear_info.version
+                    df.rename(columns={col: f'mm_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+                else:
+                    df["analysis_id_ra"]   = analysis.id
+                    df["gear_v_recon_all"] = analysis.gear_info.version
+                    df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
+                    df.rename(columns={col: f'ra_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+
+                # Merge horizontally into session_df
+                if session_df.empty:
+                    session_df = df
+                else:
+                    # Merge on shared identifier columns, expand columns sideways
+                    shared_cols = session_df.columns.intersection(df.columns).tolist()
+                    session_df = pd.merge(session_df, df, on=shared_cols, how='outer')
+
+    return session_df if not session_df.empty else None
 
 
-    
-    print(f"User: {fw.get_current_user().firstname} {fw.get_current_user().lastname}")
+def download_derivatives(project_id, segtool, input_source, keywords, timestampFilter, fw):
     project = fw.projects.find_first(f'label={project_id}')
-    st.info(f"Project: {project_id}  \nSubjects n = {len(project.subjects())}  \nSessions n = {len(project.sessions())}")
+    st.info(f"Project: {project_id}  \nSubjects: {len(project.subjects())}  \nSessions: {len(project.sessions())}")
 
-    # Create a work directory in our local "home" directory
-    #Pass the directory relative to the script
-    
-    #work_dir = Path(Path.home()/'../data/', platform='auto')
-    # If it doesn't exist, create it
-    if not data_dir.exists():
-        data_dir.mkdir(parents = True)
-    # Create a custom path for our project (we may run this on other projects in the future) and create if it doesn't exist
-    project_path = pv.sanitize_filepath(data_dir/project.label, platform='auto')
-    if not project_path.exists():
-        project_path.mkdir(parents = True)
-    # Preallocate lists
-    st.session_state.df = pd.DataFrame() #for all analysis results
+    data_dir.mkdir(parents=True, exist_ok=True)
+    project_path = pv.sanitize_filepath(data_dir / project.label, platform='auto')
+    project_path.mkdir(parents=True, exist_ok=True)
+
+    sessions = [s for s in project.sessions() if not s.subject.label.startswith('137-')]
 
     progress = st.progress(0)
     status = st.empty()
+    all_frames = []
+    max_workers = min(4, len(sessions))  # Limit number of threads to avoid overwhelming the system
 
-    # --- Find the results --- #
-    sessions = project.sessions()
-
-    # Iterate through all subjects in the project and find the results
-    #Delete sessions where session.subject.label starts with 137-
-    sessions = [ses for ses in sessions if not ses.subject.label.startswith('137-')]
-    #Add slider for number of sessions to process
-    # max_sessions = st.sidebar.slider("Select max number of sessions to fetch:", min_value=1, max_value=len(sessions), value=len(sessions))
-    # sessions = sessions[:max_sessions]
-
-    max_workers = 4  # Adjust based on your system/API limits
-    results = []
-
-    #### Multithreading download ####
-    
-    # with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    #     # Submit all tasks
-    #     future_to_session = {
-    #         executor.submit(download_session_data, project,session,project_path,segtool,timestampFilter,work_dir,keywords): session 
-    #         for session in sessions
-    #     }
+    with open(os.path.join(work_dir, '..', "utils", "columns.yml"), "r") as f:
+        tool_map = yaml.load(f, Loader=yaml.SafeLoader)
         
-    #     # Process completed tasks
-    #     for i, future in enumerate(concurrent.futures.as_completed(future_to_session)):
-    #         result = future.result()
-    #         results.append(result)
-            
-            # Update progress
-            # progress.progress((i + 1) / len(sessions))
-            # status.text(f"Completed {i + 1}/{len(sessions)}: {result}")
-    #### End multithreading ####
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_session = {
+            executor.submit(
+                download_session_data,
+                project, session, project_path, segtool, input_source, keywords, work_dir, tool_map
+            ): session
+            for session in sessions
+        }
 
-    ############ Single thread download ############
-    
-    for i, session in enumerate(sessions):
-        session = session.reload()
-        ses_label = session.label
-        sub_label = session.subject.label
-        print(sub_label, ses_label)
-        
-        
-        status.text(f"Fetching {sub_label} - {ses_label}...")
-        #Iterate through analyses, looking for both gears if derivative_type is "both"
-        analyses = [a for a in session.analyses if a.gear_info is not None and a.gear_info.name in segtool and a.created.date() > timestampFilter] #and a.gear_info.version in gear_versions
-        if input_source == "MRR":
-            #Exclude analyses where session.acquisition.label contains "gambas" (case insensitive)
-            analyses = [a for a in analyses if "gambas" not in a.label.lower()]
-        elif input_source == "Enhanced (Gambas)":
-            #Only include analyses where session.acquisition.label contains "gambas" (case insensitive)
-            analyses = [a for a in analyses if "gambas" in a.label.lower()]
+        for i, future in enumerate(concurrent.futures.as_completed(future_to_session)):
+            session = future_to_session[future]
+            try:
+                session_df = future.result()
+                if session_df is not None:
+                    all_frames.append(session_df)   # one df per session, stack vertically at the end
+            except Exception as e:
+                ses = session.reload()
+                st.warning(f"Failed {ses.subject.label} - {ses.label}: {e}")
 
-        #Grab the last created analysis for each segtool
-        analyses_filtered = []
-        for tool in segtool:
-            tool_analyses = [a for a in analyses if a.gear_info.name == tool]
-            if tool_analyses:
-                latest_analysis = max(tool_analyses, key=lambda a: a.created)
-                analyses_filtered.append(latest_analysis)
-                print("Selected latest analysis for tool ", tool, " created on ", latest_analysis.created, " version ", latest_analysis.gear_info.version)
+            progress.progress((i + 1) / len(sessions))
+            status.text(f"Completed {i + 1}/{len(sessions)}")
 
+    if not all_frames:
+        st.warning("No results found.")
+        return None
 
-        # Initialize session-level results dataframe
-        session_results = pd.DataFrame()
-        analysis_results = pd.DataFrame()
-        for analysis in analyses_filtered:
-            # if analysis.gear_info is not None and analysis.gear_info.name == segtool and analysis.created > timestampFilter and analysis.gear_info.version in gear_versions: # and analysis.gear_info.version == gearVersion and analysis.get("job").get("state") == "complete"
-            # print("pulling: ", segtool, gearVersion)
-            #st.write(f"Found {segtool} {analysis.gear_info.version} for {sub_label} - {ses_label}")
-            gear = analysis.gear_info.name
+    combined = pd.concat(all_frames, ignore_index=True)  # vertical stack, one block per session
 
-            with open(os.path.join(work_dir, '..', "utils","columns.yml"),"r") as f:
-                tool_map = yaml.load(f, Loader=yaml.SafeLoader)
-                volumetric_cols = tool_map[gear]
+    # Deduplicate: keep latest gear version per subject/session/acquisition/gear
+    for gear_col, gear_name in [('gear_v_recon_all', 'recon-all-clinical'), ('gear_v_minimorph', 'minimorph')]:
+        if gear_col in combined.columns:
+            key_cols = ['subject', 'session', 'acquisition']
+            combined = (
+                combined
+                .sort_values(gear_col, key=lambda s: s.map(lambda v: version.parse(v) if pd.notna(v) else version.parse("0")), ascending=False)
+                .drop_duplicates(subset=key_cols, keep='first')
+            )
 
-            # Initialize analysis-level results dataframe
-            
-            for analysis_file in analysis.files:
-                for keyword in keywords:
-                    if keyword in analysis_file.name:
-                        if st.session_state.fw_session_info == "Yes":
-                            session = session.reload()
-                            session_info = session.info
-                            session_info_df = pd.DataFrame([session_info])
-                            
+    # Reorder convenience columns to front
+    for col in ['scanner_software_v', 'input_gear_v']:
+        if col in combined.columns and 'acquisition' in combined.columns:
+            cols = combined.columns.tolist()
+            cols.insert(cols.index('acquisition') + 1, cols.pop(cols.index(col)))
+            combined = combined[cols]
 
+    st.session_state.df = combined
 
-                        file = analysis_file
-                        file = file.reload()
-                        # Sanitize our filename and parent path
-                        download_dir = pv.sanitize_filepath(project_path/sub_label/ses_label,platform='auto')   
-                        fileName = file.name #(analysis.gear_info.name + "_" + analysis.label + ".csv")
-
-                        # Create the path
-                        if not download_dir.exists():
-                            download_dir.mkdir(parents=True)
-                        download_path = download_dir/fileName
-                        print(download_path)
-
-                        # Download the file
-                        print('Downloading file', ses_label, analysis.label)
-                        file.download(download_path)
-
-                        # Add subject to dataframe
-                        df = pd.read_csv(download_path) 
-                        
-                        #Insert session.tags as a new column after 'session'
-                        print(session.tags)
-                        df.insert(3, 'session_qc', session.tags[-1] if session.tags else 'n/a')
-                        #If age is empty or NaN, replace with subject.age
-                        if 'age' in df.columns:
-                            if any(age not in [None, 0, "0"] for age in [session.info.get('childTimepointAge_months',None), session.info.get('age_at_scan_months',None)]):
-                                age_source = 'custom_info'
-                                age =  session.info.get('childTimepointAge_months')
-                                
-                                df['age'] = (
-                                                df['age']
-                                                .replace([0, "0", ""], np.nan)  # normalize "empty" values
-                                                .fillna(age)                    # fill NaNs with session age
-                                            )
-                                #For those change, set 'age_source' with value 'custom_info'
-                                
-                                #Account for if age_source does not exist
-                                if 'age_source' not in df.columns:
-                                    df['age_source'] = 'n/a'
-                                df['age_source'] = df.apply(lambda row: age_source if row['age'] == age else row['age_source'], axis=1)
-
-                        df["childTimepointAge_months"] = session.info.get('childTimepointAge_months', df.get("age","n/a"))
-                        df["childBiologicalSex"] = session.info.get('childBiologicalSex', 'n/a')
-                        
-
-                        df["project"] = project.label
-                        #Get analysis id
-                        
-                        #Instead of blindly appending, ensure differences in columns are handled
-                        #Drop "Unnamed" columns if they exist
-                        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]                                
-                        #Add analysis.gear_info.version in the results dataframe after the 'session' column
-                        df.insert(0, f'gear_v', analysis.gear_info.version) #analysis.gear_info.name + "/"+
-                        #If segmentation tool is minimorph, add prefix mm_ to the volumetric columns
-                        if gear == "minimorph":
-                            df["analysis_id_mm"] = analysis.id
-                            df["gear_v_minimorph"]= analysis.gear_info.version
-                            df.rename(columns={col: f'mm_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
-                        else:
-                            df["analysis_id_ra"] = analysis.id
-                            df["gear_v_recon_all"]= analysis.gear_info.version
-                            df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
-                            df.rename(columns={col: f'ra_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
-
-                        #st.dataframe(results)
-                        # if gear == "recon-all-clinical":
-                        #     #If session and acquisition combo already exists in st.session_state.df, only keep the latest version based on the gear version
-                        #     if not st.session_state.df.empty:
-                        #         existing = st.session_state.df[(st.session_state.df['subject'] == sub_label) & (st.session_state.df['session'] == ses_label) & (st.session_state.df['acquisition'] == df['acquisition'].iloc[0])]
-                        #         if not existing.empty:
-                        #             existing_version = existing[f'gear_v'].iloc[0]
-                        #             if version.parse(analysis.gear_info.version) <= version.parse(existing_version):
-                        #                 status.text(f"Skipping {sub_label} - {ses_label} - {df['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-                        #                 continue
-                        #             else:
-                        #                 #Drop the existing row
-                        #                 st.session_state.df = st.session_state.df.drop(existing.index)
-                        #                 status.text(f"Replacing {sub_label} - {ses_label} - {df['acquisition'].iloc[0]} with newer version {analysis.gear_info.version}")
-                            
-                            #Add session.info key-value pairs to the dataframe if selected
-                            #Turn dictionary into dataframe
-                            
-                                #results = pd.concat([session_info_df.reset_index(drop=True), results.reset_index(drop=True)], axis=1)
-
-                            # if st.session_state.df.empty:
-                            #     st.session_state.df = df
-                            # else:
-                            #     results = results.combine_first(df)
-
-                            # if st.session_state.fw_session_info == "Yes":
-                            #     #Merge with results dataframe
-                            #     results = results.combine_first(session_info_df)
-
-                            #Add columns current results of this analysis
-
-                            # common_cols = results.columns.intersection(st.session_state.df.columns).tolist()
-                            # for col in common_cols:
-                            #     st.session_state.df[col] = st.session_state.df[col].astype(object)
-                            #     results[col] = results[col].astype(object)
-
-                            #st.session_state.df = pd.merge(st.session_state.df, results, how='outer', on=results.columns.intersection(st.session_state.df.columns).tolist())
-                            #st.session_state.df = pd.concat([st.session_state.df, results], ignore_index=True)
-                            #st.dataframe(st.session_state.df)
-
-                        # elif gear == "minimorph":
-                        #     if not st.session_state.df2.empty:
-                        #         existing = st.session_state.df2[(st.session_state.df2['subject'] == sub_label) & (st.session_state.df2['session'] == ses_label) & (st.session_state.df2['acquisition'] == df['acquisition'].iloc[0])]
-                        #         if not existing.empty:
-                        #             existing_version = existing[f'gear_v'].iloc[0]
-                        #             if version.parse(analysis.gear_info.version) <= version.parse(existing_version) : #existing_version >= analysis.gear_info.version:
-                        #                 status.text(f"Skipping {sub_label} - {ses_label} - {df['acquisition'].iloc[0]} as existing version {existing_version} is newer or equal to {analysis.gear_info.version}")
-                                        
-                        #                 continue
-                        #             else:
-                        #                 #Drop the existing row
-                        #                 st.session_state.df2 = st.session_state.df2.drop(existing.index)
-                        #                 status.text(f"Replacing {sub_label} - {ses_label} - {df['acquisition'].iloc[0]} with newer version {analysis.gear_info.version} (previously {existing_version})")
-                            
-                        #     st.session_state.df2 = pd.concat([st.session_state.df2, results], ignore_index=True)
-
-                        
-                        analysis_results = analysis_results.combine_first(df)
-                        if st.session_state.fw_session_info == "Yes":
-                            #Merge with results dataframe
-                            analysis_results = analysis_results.combine_first(session_info_df)
-                        #Delete the file after reading it in
-                        os.remove(download_path)
-            
-            # Combine analysis results with session results
-            if not analysis_results.empty:
-                session_results = session_results.combine_first(analysis_results)
-        
-        # Concatenate session results to main dataframe only once per session
-        if not analysis_results.empty:
-            st.session_state.df = pd.concat([st.session_state.df, analysis_results], ignore_index=True)
-
-        progress.progress((i+1)/len(sessions))
-                                
-    # --- Save output --- #
-    # segtool = segtool.join("-") if isinstance(segtool, list) else segtool
-    segtool = '-'.join(segtool)
-    try:
-        outname = project.label.replace(' ', '_')
-        outname = outname.replace('(', '')
-        outname = outname.replace(')', '')
-        filename = (outname + "-" + segtool + ".csv")
-        # write DataFrame to an excel sheet 
-        #st.session_state.df = pd.concat(st.session_state.df, axis=0, ignore_index=True)
-        #If st.session_state.df is empty, add a message and exit
-        if st.session_state.df.empty:
-            st.warning("No results found for the specified criteria.")
-            return None
-        
-        if not st.session_state.df.empty:
-            if 'input_gear_v' in st.session_state.df.columns:
-                cols = st.session_state.df.columns.tolist()
-                cols.insert(cols.index('acquisition') + 1, cols.pop(cols.index('input_gear_v')))
-                st.session_state.df = st.session_state.df[cols]
-            if 'scanner_software_v' in st.session_state.df.columns:
-                cols = st.session_state.df.columns.tolist()
-                cols.insert(cols.index('acquisition') + 1, cols.pop(cols.index('scanner_software_v')))
-                st.session_state.df = st.session_state.df[cols]
-        # if not st.session_state.df2.empty:
-        #     if 'input_gear_v' in st.session_state.df2.columns:
-        #         cols = st.session_state.df2.columns.tolist()
-        #         cols.insert(cols.index('acquisition') + 1, cols.pop(cols.index('input_gear_v')))
-        #         st.session_state.df2 = st.session_state.df2[cols]
-        #     if 'scanner_software_v' in results.columns:
-        #         cols = st.session_state.df2.columns.tolist()
-        #         cols.insert(cols.index('acquisition') + 1, cols.pop(cols.index('scanner_software_v')))
-        #         st.session_state.df2 = st.session_state.df2[cols]
-
-        #If we have two dataframes, merge
-        # if not st.session_state.df.empty and not st.session_state.df2.empty:
-        #     #For every row for column "gear_v" in st.session_state.df2, add a prefix "minimorph/" to the value
-        #     #st.session_state.df2['gear_v'] = st.session_state.df2['gear_v'].apply(lambda x: 'minimorph/' + x if not x.startswith('minimorph/') else x)
-        #     #st.session_state.df['gear_v'] = st.session_state.df['gear_v'].apply(lambda x: 'recon-all-clinical/' + x if not x.startswith('recon-all-clinical/') else x)
-        #     #Rename gear_v to recon_all_v gear in st.session_state.df , and minimorph_v in st.session_state.df2
-        #     st.session_state.df = st.session_state.df.rename(columns={'gear_v': 'recon_all_v'})
-        #     st.session_state.df2 = st.session_state.df2.rename(columns={'gear_v': 'minimorph_v'})
-        #     #Get common columns between the two dataframes
-            
-        #     common_cols = st.session_state.df.columns.intersection(st.session_state.df2.columns).tolist()
-        #     print(common_cols)
-        #     st.session_state.df = pd.merge(st.session_state.df, st.session_state.df2, how='outer', on= common_cols )#['subject', 'session', 'acquisition', 'session_qc', 'age', 'age_source','sex','input_gear_v'])
-        # elif not st.session_state.df2.empty:
-        #     st.session_state.df = st.session_state.df2
-        
-
-        outdir = os.path.join(project_path, filename)
-        st.session_state.df.to_csv(outdir, index=False)
-        print(f"Results saved to {outdir}")
-        return outdir
-
-        #UPLOADS A FILE TO THE PROJECT INFORMATION TAB
-        #project.upload_file(outdir)
-    except Exception as e:
-        st.warning(f"Exception occurred: {e}")
+    # Save
+    segtool_str = '-'.join(segtool)
+    outname = project.label.replace(' ', '_').replace('(', '').replace(')', '')
+    outdir = project_path / f"{outname}-{segtool_str}.csv"
+    combined.to_csv(outdir, index=False)
+    return str(outdir)
         
 
 def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
@@ -506,6 +201,10 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     other_cols = [col for col in cols if col not in front_cols + ra_cols + mm_cols]
     new_order = front_cols + ra_cols + mm_cols + other_cols
 
+    #If columns in new_order are not in the dataframe, add them with NaN values
+    for col in new_order:
+        if col not in st.session_state.df.columns:
+            st.session_state.df[col] = np.nan
     st.session_state.df = st.session_state.df[new_order]
 
 
