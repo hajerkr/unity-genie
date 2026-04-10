@@ -3,16 +3,56 @@ import flywheel
 import os
 import re
 from datetime import datetime
+import traceback
 
-def is_complete_mrr(asys):
+def is_complete(asys,gearname):
+    try:
+        asys=asys.reload()
+    except Exception as e:
+        print(f"Error reloading analysis {asys.id}: {e}")
+        
+    if gearname =="gambas" and getattr(asys, 'gear_info', None) is None:
+   
+            print(f"Analysis {asys.id} has no gear_info, checking label for gambas-batch...")
+            #Look at analysis container containing "gambas-batch" in the label
+            print(asys.label)
+            return (
+                "gambas" in asys.label and "batch" in asys.label
+                and len(asys.files) > 0
+            )
+    else:
+        return (
+            asys.gear_info is not None
+            and asys.gear_info.get('name') == gearname
+            and asys.job is not None
+            and asys.job.get('state') == 'complete'
+        )
+    
+    # asys=asys.reload()
+    # return (
+    #     asys.gear_info is not None
+    #     and gearname in asys.gear_info.get('name') 
+    #     and asys.job is not None
+    #     and asys.job.get('state') == 'complete'
+    # )
+
+def is_failed(asys,gearname):
+    asys=asys.reload()
     return (
         asys.gear_info is not None
-        and asys.gear_info.get('name') == "mrr"
+        and gearname in asys.gear_info.get('name')
         and asys.job is not None
-        and asys.job.get('state') == 'complete'
+        and asys.job.get('state') == 'failed'
     )
 
-
+def is_pending(asys,gearname):
+    asys=asys.reload()
+    return (
+        asys.gear_info is not None
+        and gearname in asys.gear_info.get('name')
+        and asys.job is not None
+        and asys.job.get('state') in ['pending', 'running']
+    )
 def run_gambas_jobs(fw, project):
     job_list = []
     processed_sessions = 0
@@ -163,18 +203,26 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                 print(f"\n🔍 Checking session: {session_id} for subject {session.subject.label}")
                 try:
                     # Check if gear already completed specifically for this input, or has a submitted job already
-                    if has_completed_asys(session, gear, gambas=gambas):
-                            status.text(f"✅ {gearname} with this input already complete, skipping {session_id}")
-                            skipped_sessions += 1
-                            
-                            continue
-                    elif has_pending_asys(session, gear, gambas=gambas):
+                    if has_completed_asys(session, gearname, gambas=gambas):
+                        status.text(f"✅ {gearname} with this input already complete, skipping {session_id}")
+                        print(f"✅ {gearname} with this input already complete for session {session_id}, skipping.")
+                        skipped_sessions += 1
+                        
+                        continue
+                    elif has_pending_asys(session, gearname, gambas=gambas):
                         status.text(f"⏳ {gearname} with this input already pending/running, skipping {session_id}")
+                        print(f"⏳ {gearname} with this input already pending/running for session {session_id}, skipping.")
+                        skipped_sessions += 1
+                        
+                        continue
+                    elif has_failed_asys(session, gearname, gambas=gambas):
+                        status.text(f"❌ {gearname} with this input has previously failed, skipping {session_id}")
+                        print(f"❌ {gearname} with this input has previously failed for session {session_id}, skipping.")
                         skipped_sessions += 1
                         
                         continue
                     
-                    if gearname in ["qa","mriqc"]:
+                    if gearname in ["mriqc"]:
                         job_id =  submit_job(fw, session, gearname)
                         job_list.extend(job_id)
                         processed_sessions += 1
@@ -188,13 +236,15 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         if not gambas_file:
                             status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job for session {session_id}...")
                             #Add a function to run gambas if nothing has been found
-                            job_id = submit_job(fw, session,"gambas")
-                            try:
-                                job_list.append(job_id)
-                                status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
-                            except Exception as e:
-                                    status.text(f"WARNING: Job cannot be sent. Error: {e}")
 
+                            
+                            # job_id = submit_job(fw, session,"gambas")
+                            # try:
+                            #     job_list.append(job_id)
+                            #     status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                            # except Exception as e:
+                            #         status.text(f"WARNING: Job cannot be sent. Error: {e}")
+                            
                             skipped_sessions += 1
                             
                             continue
@@ -207,25 +257,31 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             processed_sessions += 1
                             print(f"🚀 Submitted {gearname} job (ID: {job_id})")
                             
+                            
                     ### MRR CHECKS ####
                     elif not gambas and gearname != 'freesurfer-recon-all':
                         # Submit seg job without MRR input
                         
                         inputfile = None
-                        mrr_matches = [asys for asys in session.analyses if is_complete_mrr(asys)]
-                       
-                        if not mrr_matches:
-                            for acq in session.acquisitions():
-                                acq = acq.reload()
-                                mrr_matches = [asys for asys in acq.analyses if is_complete_mrr(asys)]
-                                if mrr_matches:
-                                    break
+                        mrr_results = fw.search(
+                            {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS mrr",
+                            "return_type":"analysis"}
+                        )
 
-                            if not mrr_matches:
-                                status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
-                                print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
-                                skipped_sessions += 1
-                                continue
+                        mrr_matches = [asys for asys in mrr_results if is_complete(asys,"mrr")]
+                       
+                        # if not mrr_matches:
+                        #     for acq in session.acquisitions():
+                        #         acq = acq.reload()
+                        #         mrr_matches = [asys for asys in acq.analyses if is_complete(asys,"mrr")]
+                        #         if mrr_matches:
+                        #             break
+
+                        if not mrr_matches:
+                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
+                            print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
+                            skipped_sessions += 1
+                            continue
                     
                         last_run_date = max([asys.created for asys in mrr_matches])                        
                         last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
@@ -266,6 +322,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         
                 except Exception as e:
+                    print(f"Exception caught for session {session_id}: ", traceback.format_exc())
                     status.text(f"❌ Error processing session {session_id}: {str(e)}")
                     failed_sessions += 1
                     continue
@@ -285,42 +342,111 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
     return job_list
 
  
-def has_completed_asys(session, gear,gambas=False):
+def has_completed_asys(session, gearname,gambas=False):
     """
     Check if session already has a completed segmentation analysis of the target version.
     """
-    for analysis in session.analyses:
-        if not analysis.gear_info:
-            continue
+
+    query = ""
+    if gambas:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND analysis.label CONTAINS gambas)"
+    else:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND NOT(analysis.label CONTAINS gambas))"
+
+    gear_results = fw.search(
+        {"structured_query": query,
+        "return_type":"analysis"}
+    )
+    gear_matches = [r.analysis.reload() for r in gear_results if is_complete(r.analysis,gearname)]
+
+    if gear_matches:
+        return True
+    
+    # for analysis in session.analyses:
+    #     if not analysis.gear_info:
+    #         continue
             
-        gear_name = analysis.gear_info.get('name', '').lower()
-        #gear_version = analysis.gear_info.get('version', '')
+    #     gear_name = analysis.gear_info.get('name', '').lower()
+    #     #gear_version = analysis.gear_info.get('version', '')
         
-        if gear.gear.name in gear_name : #and gear_version == target_version:
-            job_state = analysis.job.get('state') if analysis.job else None
-            if gambas and 'gambas' in analysis.label.lower() and job_state == 'complete':
-                return True
-            elif not gambas and 'gambas' not in analysis.label.lower() and job_state == 'complete':
-                return True
+    #     if gear.gear.name in gear_name : #and gear_version == target_version:
+    #         job_state = analysis.job.get('state') if analysis.job else None
+    #         if gambas and 'gambas' in analysis.label.lower() and job_state == 'complete':
+    #             return True
+    #         elif not gambas and 'gambas' not in analysis.label.lower() and job_state == 'complete':
+    #             return True
     return False
 
-def has_pending_asys(session, gear, gambas=False):
+def has_pending_asys(session, gearname, gambas=False):
     """
     Check if session already has a pending segmentation analysis of the target version.
     """
-    for analysis in session.analyses:
-        if not analysis.gear_info:
-            continue
+
+    query = ""
+    if gambas:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND analysis.label CONTAINS gambas)"
+    else:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND NOT(analysis.label CONTAINS gambas))"
+
+
+    gear_results = fw.search(
+        {"structured_query": query,
+        "return_type":"analysis"}
+    )
+    gear_matches = [r.analysis.reload() for r in gear_results if is_pending(r.analysis,gearname)]
+
+    if gear_matches:
+        return True
+    
+    # for analysis in session.analyses:
+    #     if not analysis.gear_info:
+    #         continue
             
-        gear_name = analysis.gear_info.get('name', '').lower()
-        #gear_version = analysis.gear_info.get('version', '')
+    #     gear_name = analysis.gear_info.get('name', '').lower()
+    #     #gear_version = analysis.gear_info.get('version', '')
         
-        if gear.gear.name in gear_name : #and gear_version == target_version:
-            job_state = analysis.job.get('state') if analysis.job else None
-            if gambas and 'gambas' in analysis.label.lower() and job_state in ['pending', 'running']:
-                return True
-            elif not gambas and 'gambas' not in analysis.label.lower() and job_state in ['pending', 'running']:
-                return True
+    #     if gear.gear.name in gear_name : #and gear_version == target_version:
+    #         job_state = analysis.job.get('state') if analysis.job else None
+    #         if gambas and 'gambas' in analysis.label.lower() and job_state in ['pending', 'running']:
+    #             return True
+    #         elif not gambas and 'gambas' not in analysis.label.lower() and job_state in ['pending', 'running']:
+    #             return True
+    return False
+
+def has_failed_asys(session, gearname, gambas=False):
+    """
+    Check if session already has a failed segmentation analysis of the target version.
+    """
+
+    query = ""
+    if gambas:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND analysis.label CONTAINS gambas)"
+    else:
+        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND NOT(analysis.label CONTAINS gambas))"
+
+
+    gear_results = fw.search(
+        {"structured_query": query,
+        "return_type":"analysis"}
+    )
+    gear_matches = [r.analysis.reload() for r in gear_results if is_failed(r.analysis,gearname)]
+
+    if gear_matches:
+        return True
+    
+    # for analysis in session.analyses:
+    #     if not analysis.gear_info:
+    #         continue
+            
+    #     gear_name = analysis.gear_info.get('name', '').lower()
+    #     #gear_version = analysis.gear_info.get('version', '')
+        
+    #     if gear.gear.name in gear_name : #and gear_version == target_version:
+    #         job_state = analysis.job.get('state') if analysis.job else None
+    #         if gambas and 'gambas' in analysis.label.lower() and job_state == 'failed':
+    #             return True
+    #         elif not gambas and 'gambas' not in analysis.label.lower() and job_state == 'failed':
+    #             return True
     return False
  
 def find_latest_gambas_file(session):
@@ -328,33 +454,15 @@ def find_latest_gambas_file(session):
     Find the most recent gambas analysis file in the session or its acquisitions.
     Returns the first suitable gambas file ending with 'rec-axi_T2w_gambas.nii.gz' from the latest gambas analysis, or None if not found.
     """
-    print(f"   Checking {len(session.analyses)} analyses in session")
+    print(f"   Checking analyses in session")
     
-    # Debug: Print all session analyses
-    for i, analysis in enumerate(session.analyses):
-        gear_name = analysis.gear_info.get('name', 'No gear name') if analysis.gear_info else 'No gear_info'
-        print(f"   Session Analysis {i}: label='{analysis.label}', gear='{gear_name}'")
-    
-    # Find all gambas analyses in this session
     gambas_analyses = []
-    for analysis in session.analyses:
-        if is_gambas_analysis(analysis):
-            gambas_analyses.append(analysis)
-            print(f"   Found gambas in session: {analysis.label}")
-    
-    # Also check acquisitions for gambas analyses
-    print(f"   Checking acquisitions for gambas analyses...")
-    for acquisition in session.acquisitions():
-        acquisition = acquisition.reload()
-        print(f"   Acquisition: {acquisition.label} has {len(acquisition.analyses)} analyses")
-        
-        for i, analysis in enumerate(acquisition.analyses):
-            gear_name = analysis.gear_info.get('name', 'No gear name') if analysis.gear_info else 'No gear_info'
-            print(f"     Acquisition Analysis {i}: label='{analysis.label}', gear='{gear_name}'")
-            
-            if is_gambas_analysis(analysis):
-                gambas_analyses.append(analysis)
-                print(f"   Found gambas in acquisition: {analysis.label}")
+    gambas_results = fw.search(
+        {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS gambas",
+        "return_type":"analysis"}
+    )
+    gambas_analyses = [r.analysis for r in gambas_results if is_complete(r.analysis,"gambas")]
+    latest_gambas = gambas_analyses[-1] if gambas_analyses else None
     
     if not gambas_analyses:
         print("   No gambas analyses found in session or acquisitions")
@@ -363,14 +471,22 @@ def find_latest_gambas_file(session):
     print(f"   Found {len(gambas_analyses)} gambas analysis(es) total")
     
     # Use the latest gambas analysis (assuming they're ordered chronologically)
-    latest_gambas = gambas_analyses[-1]
+    # latest_gambas = gambas_analyses[-1]
     print(f"   Using latest gambas analysis: {latest_gambas.label}")
     
     # Debug: Print all files in the analysis
-    print(f"   Files in analysis: {[f.name for f in latest_gambas.files]}")
     
+    
+    #Try to reload the analysis
+    try:
+        latest_gambas = latest_gambas.reload()
+        print(f"   Reloaded analysis successfully.")
+    except Exception as e:
+        print(f"   Warning: Could not reload analysis. Potentially manually created analysis container. Error: {e}")
+
+    print(f"   Files in analysis: {[f.name for f in latest_gambas.files]}")
     # Find gambas output files - specifically look for files ending with "rec-axi_T2w_gambas.nii.gz"
-    pattern = re.compile(r"rec-axi.*_T2w_(gambas|ResCNN)\.nii\.gz$")
+    pattern = re.compile(r"(gambas|ResCNN)\.nii\.gz$", re.IGNORECASE)
 
     gambas_files = [
         f for f in latest_gambas.files
@@ -524,8 +640,14 @@ def run_circumference_gear(fw, project, session=None):
                 print('No analysis containers')
             else:
                 try:
-                    mrr_matches = [asys for asys in analyses if asys.gear_info is not None and asys.gear_info.get('name') == "mrr" and asys.job.get('state') == 'complete']
-                    gambas_matches =  [asys for asys in analyses if "gambas" in asys.label]
+
+                    gambas_results = fw.search(
+                        {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS gambas",
+                        "return_type":"analysis"}
+                    )
+
+                    gambas_matches = [r.analysis.reload() for r in gambas_results if is_complete(r.analysis,"gambas")]
+                    # gambas_matches =  [asys for asys in analyses if "gambas" in asys.label]
 
                     for matches in [gambas_matches]:
                         print(f'Found {len(matches)}')
