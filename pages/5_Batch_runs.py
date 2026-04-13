@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 import traceback
 
-def is_complete(asys,gearname):
+def is_complete(asys,gearname,latest_version=False):
     try:
         asys=asys.reload()
     except Exception as e:
@@ -21,11 +21,16 @@ def is_complete(asys,gearname):
                 and len(asys.files) > 0
             )
     else:
+        gear = fw.gears.find_first(f"gear.name={gearname}")
+        #Get gear version
+        gear_version = gear.gear.version if gear else "Unknown"
         return (
             asys.gear_info is not None
             and asys.gear_info.get('name') == gearname
             and asys.job is not None
             and asys.job.get('state') == 'complete'
+            #ensure last gear version is ran
+            and (not latest_version or asys.gear_info.get('version') == gear_version)
         )
     
     # asys=asys.reload()
@@ -36,13 +41,17 @@ def is_complete(asys,gearname):
     #     and asys.job.get('state') == 'complete'
     # )
 
-def is_failed(asys,gearname):
+def is_failed(asys,gearname, latest_version=False):
     asys=asys.reload()
+    gear = fw.gears.find_first(f"gear.name={gearname}")
+    #Get gear version
+    gear_version = gear.gear.version if gear else "Unknown"
     return (
         asys.gear_info is not None
         and gearname in asys.gear_info.get('name')
         and asys.job is not None
         and asys.job.get('state') == 'failed'
+        and (not latest_version or asys.gear_info.get('version') == gear_version)
     )
 
 def is_pending(asys,gearname):
@@ -359,7 +368,7 @@ def has_completed_asys(session, gearname,gambas=False):
         {"structured_query": query,
         "return_type":"analysis"}
     )
-    gear_matches = [r.analysis.reload() for r in gear_results if is_complete(r.analysis,gearname)]
+    gear_matches = [r.analysis.reload() for r in gear_results if is_complete(r.analysis,gearname, st.session_state.latest_version )]
 
     if gear_matches:
         return True
@@ -431,7 +440,7 @@ def has_failed_asys(session, gearname, gambas=False):
         {"structured_query": query,
         "return_type":"analysis"}
     )
-    gear_matches = [r.analysis.reload() for r in gear_results if is_failed(r.analysis,gearname)]
+    gear_matches = [r.analysis.reload() for r in gear_results if is_failed(r.analysis,gearname,st.session_state.latest_version)]
 
     if gear_matches:
         return True
@@ -795,6 +804,10 @@ if selected_gear == "Freesurfer-recon-all":
 st.session_state.debug_mode =  False
 n_sessions_debug = 4
 debug_mode = st.checkbox(f"Debug Mode (Run on first {n_sessions_debug} sessions only)", value=False)
+#Add checkbox to ensure latest version is ran
+latest_version = st.checkbox("Use latest version of gear", value=False)
+st.session_state.latest_version = latest_version
+
 if debug_mode:
     st.warning(f"⚠️ Debug Mode is ON: The batch job will only run on the first {n_sessions_debug} sessions of the selected project.")
     st.session_state.debug_mode = True
