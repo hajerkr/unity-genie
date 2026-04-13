@@ -268,7 +268,8 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             "return_type":"analysis"}
                         )
 
-                        mrr_matches = [asys for asys in mrr_results if is_complete(asys,"mrr")]
+                        mrr_matches = [r.analysis.reload() for r in mrr_results if is_complete(r.analysis,"mrr")]
+                        
                        
                         # if not mrr_matches:
                         #     for acq in session.acquisitions():
@@ -296,6 +297,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                         job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         job_list.append(job_id)
                         processed_sessions += 1
+                        status.text(f"🚀 Submitted {gearname} job")
                         print(f"🚀 Submitted {gearname} job (ID: {job_id})")
 
                     elif gearname == 'freesurfer-recon-all':                     
@@ -493,7 +495,7 @@ def find_latest_gambas_file(session):
         if pattern.search(f.name)
     ]
 
-    if not gambas_files:
+    if not gambas_files: 
         print(f"   No files ending with 'rec-axi(_run-XX)_T2w_gambas.nii.gz' found in analysis {latest_gambas.label}")
         return None
     
