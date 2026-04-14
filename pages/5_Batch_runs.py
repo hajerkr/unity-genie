@@ -17,7 +17,7 @@ def is_complete(asys,gearname,latest_version=False):
             #Look at analysis container containing "gambas-batch" in the label
             print(asys.label)
             return (
-                "gambas" in asys.label and "batch" in asys.label
+                "gambas" in asys.label and ("0.4.17" in asys.label or "0.4.14" in asys.label)
                 and len(asys.files) > 0
             )
     else:
@@ -254,8 +254,8 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             except Exception as e:
                                     status.text(f"WARNING: Job cannot be sent. Error: {e}")
                             
+                            processed_sessions += 1
                             skipped_sessions += 1
-                            
                             continue
         
                         elif gambas_file:
@@ -264,6 +264,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             job_id = submit_seg_job(gear, session, gambas=True, input_file=gambas_file, analysis_tag=analysis_tag)
                             job_list.append(job_id)
                             processed_sessions += 1
+
                             print(f"🚀 Submitted {gearname} job (ID: {job_id})")
                             
                             
