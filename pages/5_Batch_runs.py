@@ -247,12 +247,12 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             #Add a function to run gambas if nothing has been found
 
                             
-                            # job_id = submit_job(fw, session,"gambas")
-                            # try:
-                            #     job_list.append(job_id)
-                            #     status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
-                            # except Exception as e:
-                            #         status.text(f"WARNING: Job cannot be sent. Error: {e}")
+                            job_id = submit_job(fw, session,"gambas")
+                            try:
+                                job_list.append(job_id)
+                                status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                            except Exception as e:
+                                    status.text(f"WARNING: Job cannot be sent. Error: {e}")
                             
                             skipped_sessions += 1
                             
