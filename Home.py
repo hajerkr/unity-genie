@@ -43,7 +43,7 @@ def main_app():
     # Sidebar for navigation
     st.write("Choose a module:")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4= st.columns(4)
 
     with col1:
         if st.button("📥 Data Download"):
@@ -57,8 +57,10 @@ def main_app():
         if st.button("🧩 Segmentation QC"):
             st.switch_page("pages/3_QC_Segmentation.py")
     with col4:
-        if st.button("📊 Analysis and Visualization"):
-            st.switch_page("pages/4_Analysis_Visualization.py")
+        if st.button(" 📦 Batch Runs"):
+            st.switch_page("pages/5_Batch_Runs.py")
+
+     
 
 
 if not st.session_state.authenticated:
