@@ -17,12 +17,14 @@ from packaging import version
 from dotenv import load_dotenv
 from utils.authentication import login_screen
 import concurrent.futures
+import traceback
+
 # import threading
 # from concurrent.futures import ThreadPoolExecutor
 # from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
 
-def download_session_data(project, session, project_path, segtool, input_source, keywords, work_dir, tool_map):
+def download_session_data(project, session, project_path, segtool, input_source, fw_session_info, keywords, work_dir, tool_map):
     """
     Returns a single DataFrame row (or few rows) representing this session,
     with all gear/keyword CSVs merged horizontally.
@@ -31,30 +33,51 @@ def download_session_data(project, session, project_path, segtool, input_source,
     session = session.reload()
     ses_label = session.label
     sub_label = session.subject.label
+    session_df = pd.DataFrame()  # will accumulate horizontally across gears/keywords
 
     analyses = [
         a for a in session.analyses
-        if a.gear_info is not None and a.gear_info.name in segtool
+        if a.reload().gear_info is not None and a.reload().gear_info.name in segtool and a.reload().job.get('state') == 'complete'
     ]
 
-    if input_source == "MRR":
-        analyses = [a for a in analyses if all("gambas" not in acq.label.lower() for acq in session.acquisitions())]
-    elif input_source == "Enhanced (Gambas)":
-        analyses = [a for a in analyses if any("gambas" in acq.label.lower() for acq in session.acquisitions())]
+    mrr_analyses = []
+    gambas_analyses = []
+    
+    def get_latest(analyses, input_keyword):
+        keywords = [input_keyword] if isinstance(input_keyword, str) else input_keyword
+        candidates = [a for a in analyses if any(kw in a.inputs[0].name for kw in keywords)]
+        return [max(candidates, key=lambda a: a.created)] if candidates else []
 
-    # Keep only latest analysis per tool
-    analyses_filtered = []
-    for tool in segtool:
-        tool_analyses = [a for a in analyses if a.gear_info.name == tool]
-        if tool_analyses:
-            analyses_filtered.append(max(tool_analyses, key=lambda a: a.created))
+    for segmentation_tool in segtool:
+        tool_analyses = [a for a in analyses if a.gear_info.name == segmentation_tool]  # scoped
 
-    session_df = pd.DataFrame()  # will accumulate horizontally across gears/keywords
+        if input_source == "MRR":
+            mrr_analyses.append(get_latest(tool_analyses, "mrr"))
 
+        elif input_source == "Enhanced (Gambas)":
+            gambas_analyses.append(get_latest(tool_analyses, ["gambas", "ResCNN"]))
+
+        else:
+            mrr_analyses.append(get_latest(tool_analyses, "mrr"))
+            gambas_analyses.append(get_latest(tool_analyses, ["gambas", "ResCNN"]))
+
+            # gambas_analyses = [a for a in analyses if "gambas" in a.inputs[0].name]
+            #print(f"Session {ses_label} - {mrr_filtered.label} MRR analyses, {gambas_filtered.label} Gambas analyses")
+            # mrr_analyses.append(mrr_filtered)
+            # gambas_analyses.append(gambas_filtered)
+    
+    
+    #Add the mrr_analyses and gambas_analyses in one list
+    analyses_filtered = mrr_analyses + gambas_analyses    
+    #Delete empty lists from analyses_filtered
+    analyses_filtered = [a for a in analyses_filtered if a]  # filter out empty lists
+
+    analyses_filtered = [a for sublist in analyses_filtered for a in sublist if a]  # flatten and filter out any remaining None values
     for analysis in analyses_filtered:
+        # print(type(analysis),type(analysis))
+        analysis = analysis.reload()
         gear = analysis.gear_info.name
         volumetric_cols = tool_map[gear]
-
         for analysis_file in analysis.files:
             for keyword in keywords:
                 if keyword not in analysis_file.name:
@@ -65,6 +88,7 @@ def download_session_data(project, session, project_path, segtool, input_source,
                 download_dir = pv.sanitize_filepath(project_path / sub_label / ses_label, platform='auto')
                 download_dir.mkdir(parents=True, exist_ok=True)
                 download_path = download_dir / file.name
+                print(f"Downloading {file.name} to {download_path}...")
                 file.download(download_path)
 
                 df = pd.read_csv(download_path)
@@ -84,6 +108,10 @@ def download_session_data(project, session, project_path, segtool, input_source,
                     df["analysis_id_mm"]   = analysis.id
                     df["gear_v_minimorph"] = analysis.gear_info.version
                     df.rename(columns={col: f'mm_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+                elif gear == "supersynth":
+                    df["analysis_id_ss"]   = analysis.id
+                    df["gear_v_supersynth"] = analysis.gear_info.version
+                    df.rename(columns={col: f'ss_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
                 else:
                     df["analysis_id_ra"]   = analysis.id
                     df["gear_v_recon_all"] = analysis.gear_info.version
@@ -91,17 +119,36 @@ def download_session_data(project, session, project_path, segtool, input_source,
                     df.rename(columns={col: f'ra_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
 
                 # Merge horizontally into session_df
+                #print(session_df, session_df.shape)
                 if session_df.empty:
+                    print(f"Subject {sub_label} Session {ses_label} - initializing session_df with {file.name}")
                     session_df = df
                 else:
-                    # Merge on shared identifier columns, expand columns sideways
-                    shared_cols = session_df.columns.intersection(df.columns).tolist()
-                    session_df = pd.merge(session_df, df, on=shared_cols, how='outer')
+                    print(f"Session {ses_label} - merging {file.name} into session_df")
+                    id_cols = ['subject', 'session']  # adjust to match your actual col names
+                    merge_cols = [c for c in id_cols if c in session_df.columns and c in df.columns]
 
+                    # Drop columns from df that already exist in session_df (excluding the key)
+                    duplicate_cols = [c for c in df.columns if c in session_df.columns and c not in merge_cols]
+                    df_to_merge = df.drop(columns=duplicate_cols)
+                    #Concat the dataframes horizontally, keeping all rows (outer join)
+                    session_df = pd.merge(session_df, df_to_merge, on=merge_cols, how='outer')
+
+
+    #print(session_df.values)
+    #Turn dataframe into list 
+    #If user wants fw_session_info , pull session tags, and session custom information and add it to the csv
+    if fw_session_info == "Yes":
+        session_tags = session.tags if session.tags else []
+        session_df['session_tags'] = ' | '.join(session_tags) if session_tags else 'n/a'
+       
+        for key, value in session.info.items():
+            session_df[f'{key}'] = value
+    print(f"Finished processing session {ses_label} for subject {sub_label}. Final shape of session_df: {session_df.shape} with {len(session_df.columns.tolist())} columns")
     return session_df if not session_df.empty else None
 
 
-def download_derivatives(project_id, segtool, input_source, keywords, timestampFilter, fw):
+def download_derivatives(project_id, segtool, input_source, fw_session_info , keywords, timestampFilter, fw):
     project = fw.projects.find_first(f'label={project_id}')
     st.info(f"Project: {project_id}  \nSubjects: {len(project.subjects())}  \nSessions: {len(project.sessions())}")
 
@@ -116,14 +163,14 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
     all_frames = []
     max_workers = min(4, len(sessions))  # Limit number of threads to avoid overwhelming the system
 
-    with open(os.path.join(work_dir, '..', "utils", "columns.yml"), "r") as f:
+    with open(os.path.join(work_dir, '..', "utils", "vol_columns.yml"), "r") as f:
         tool_map = yaml.load(f, Loader=yaml.SafeLoader)
-        
+    print(segtool)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_session = {
             executor.submit(
                 download_session_data,
-                project, session, project_path, segtool, input_source, keywords, work_dir, tool_map
+                project, session, project_path, segtool, input_source, fw_session_info, keywords, work_dir, tool_map
             ): session
             for session in sessions
         }
@@ -134,9 +181,10 @@ def download_derivatives(project_id, segtool, input_source, keywords, timestampF
                 session_df = future.result()
                 if session_df is not None:
                     all_frames.append(session_df)   # one df per session, stack vertically at the end
+                    #print(all_frames)
             except Exception as e:
                 ses = session.reload()
-                st.warning(f"Failed {ses.subject.label} - {ses.label}: {e}")
+                st.warning(f"Failed {ses.subject.label} - {ses.label}: {e} ,  {traceback.format_exc()}")
 
             progress.progress((i + 1) / len(sessions))
             status.text(f"Completed {i + 1}/{len(sessions)}")
@@ -178,6 +226,8 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     """
     Assemble a CSV from a list of derivative file paths.
     """
+
+
     st.session_state.df = []
     projects = []
     # For simplicity, let's assume derivatives is a list of file paths
@@ -252,10 +302,18 @@ def get_projects():
 projects = get_projects()
 
 project_ids = st.sidebar.multiselect("Select Projects", projects)
-derivative_type = st.sidebar.radio("Segmentation Tool:", ["recon-all-clinical", "minimorph","Both"])
+
+#Add tickboxes if recon all was selected, to select area, thickness, and volume
+#Check boxes 
+minimorph = st.sidebar.checkbox("Minimorph", value=False)
+recon_all = st.sidebar.checkbox("Recon-all-clinical", value=False)
+supersynth = st.sidebar.checkbox("Supersynth", value=False)
+
+# derivative_type = st.sidebar.radio("Segmentation Tool:", ["recon-all-clinical", "minimorph","Both"])
 #Add radio button yes or no to include flywheel session information in the download
-st.session_state.fw_session_info = st.sidebar.radio("Include Flywheel Session Info (tags, custom info) in download?", ["Yes", "No"], index=0)
 st.session_state.input_source = st.sidebar.radio("Structural Image Segmented:", ["MRR", "Enhanced (Gambas)", "Both"], index=0)
+st.session_state.fw_session_info = st.sidebar.radio("Include Flywheel Session Info (tags, custom info) in download?", ["No", "Yes"], index=0)
+
 # if st.sidebar.button("Fetch derivatives"):
 #     with st.spinner("Fetching derivatives..."):
 #         lastV = fw.get_all_gears(
@@ -272,17 +330,19 @@ gear_vesions = 5
 # gear_versions = st.sidebar.slider("Last gear versions:", min_value=1, max_value=10, value=3)
 
 #Add date picker for after date
-after_date = st.sidebar.date_input("Select date (only fetch analyses after this date):", value=None)
+after_date = None
+#after_date = st.sidebar.date_input("Select date (only fetch analyses after this date):", value=None)
 
+derivative_type = []
+keywords = []
+if recon_all:
+    derivative_type.append("recon-all-clinical")
 
-#Add tickboxes if recon all was selected, to select area, thickness, and volume
-if derivative_type == "recon-all-clinical" or derivative_type == "Both":
     st.sidebar.markdown("**Select outputs to download:**")
     area = st.sidebar.checkbox("Area", value=False)
     thickness = st.sidebar.checkbox("Thickness", value=False)
     volume = st.sidebar.checkbox("Volume", value=True)
-    
-    keywords = []
+
     if area:
         keywords.append("area")
     if thickness:
@@ -293,13 +353,11 @@ if derivative_type == "recon-all-clinical" or derivative_type == "Both":
     if not keywords:
         st.sidebar.warning("Please select at least one output type.")
 
-else:
-    keywords = ["volume"]
+if minimorph:
+    derivative_type.append("minimorph")
+if supersynth:
+    derivative_type.append("supersynth")
 
-if derivative_type == "Both":
-    derivative_type = ["recon-all-clinical", "minimorph"]
-else:
-    derivative_type = [derivative_type]
 
 if st.sidebar.button("Fetch derivatives"):
     
@@ -309,11 +367,10 @@ if st.sidebar.button("Fetch derivatives"):
     status = st.empty()
     
     for i, proj in enumerate(project_ids):
-        st.write(f"Fetching {derivative_type} for {proj}...")
+        st.write(f"Fetching {", ".join(derivative_type)} for {proj}...")
         # Connect to your Flywheel instance
         if after_date is None:
             after_date = datetime(2020, 1, 1, 0, 0, 0, 0, pytz.UTC)
-
 
         # fw = flywheel.Client(api_key=api_key)
         # project = fw.projects.find_first(f'label={project_id}')
@@ -329,7 +386,8 @@ if st.sidebar.button("Fetch derivatives"):
         # sessions = sessions[:max_sessions]
         st.info(f"Download for {proj} started in background.")
         # print(st.session_state)
-        derivatives = download_derivatives(proj, derivative_type,st.session_state.input_source, keywords, after_date,fw)
+        
+        derivatives = download_derivatives(proj, derivative_type,st.session_state.input_source,st.session_state.fw_session_info, keywords, after_date,fw)
         #derivatives.to_csv(f"/Users/Hajer/unity/debugging/derivatives_{proj}.csv", index=False)
         if derivatives:
             derivative_paths.extend([derivatives])

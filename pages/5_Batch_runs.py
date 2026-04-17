@@ -249,13 +249,16 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             
                             job_id = submit_job(fw, session,"gambas")
                             try:
-                                job_list.append(job_id)
-                                status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                                if job_id:
+                                    job_list.append(job_id)
+                                    status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                                else:
+                                    skipped_sessions += 1
                             except Exception as e:
                                     status.text(f"WARNING: Job cannot be sent. Error: {e}")
                             
                             processed_sessions += 1
-                            skipped_sessions += 1
+                            
                             continue
         
                         elif gambas_file:
