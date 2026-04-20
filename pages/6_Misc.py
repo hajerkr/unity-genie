@@ -1,4 +1,4 @@
-import flywheel
+from flywheel.client import Client
 from fw_client import FWClient
 import pandas as pd
 import streamlit as st

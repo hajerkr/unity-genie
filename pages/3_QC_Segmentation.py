@@ -18,7 +18,7 @@ import pandas as pd
 import matplotlib.image as mpimg
 import re
 #from dotenv import load_dotenv
-import flywheel
+from flywheel.client import Client
 import logging
 log = logging.getLogger(__name__)
 # from reportlab.lib.pagesizes import letter
@@ -528,7 +528,7 @@ if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == Fals
 else:
     st.session_state.api_key = API_KEY
 
-fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
+fw = Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 
 
 #Upload the list of outliers as a csv

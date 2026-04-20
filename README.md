@@ -31,6 +31,15 @@ This repository provides a workflow for downloading and aggregating neuroimaging
 
 Install with:
 ```
+start.sh
+```
+In start.sh, a virtual environment is created and dependencies are installed:
+
+```
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate 
+# Install required packages
 pip install -r requirements.txt
 ```
 
@@ -41,7 +50,7 @@ This tool requires an API key to access data. The API key should be stored in a 
 1. Create a .env file
 2. Add your API key to the file:
 ```
-API_KEY=your_api_key_here
+FW_CLI_API_KEY=your_api_key_here
 ```
 
 The app automatically loads this file using python-dotenv
@@ -55,7 +64,7 @@ To run this app locally:
 
 Run the Streamlit app:
 ```
-streamlit run app.py
+venv/bin/python -m streamlit run Home.py
 ```
 
 This will open a local web interface in your browser.
