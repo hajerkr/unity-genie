@@ -446,7 +446,7 @@ def has_failed_asys(session, gearname, gambas=False):
     )
     gear_matches = [r.analysis.reload() for r in gear_results if is_failed(r.analysis,gearname,st.session_state.latest_version)]
 
-    if gear_matches:
+    if len(gear_matches) > 2: #If there are more than 2 failed analyses, likely something is wrong and no need to keep trying and failing, so we will skip to save resources
         return True
     
     # for analysis in session.analyses:
