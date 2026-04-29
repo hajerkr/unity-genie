@@ -131,7 +131,7 @@ recon-all-clinical: ['total_intracranial',
       'rh_superiorfrontal_area', 'rh_superiorparietal_area',
       'rh_superiortemporal_area', 'rh_supramarginal_area',
       'rh_frontalpole_area', 'rh_temporalpole_area',
-      'rh_transversetemporal_area', 'rh_insula_area', 'rh_WhiteSurfArea_area',
+      'rh_transversetemporal_area', 'rh_insula_area', 'rh_WhiteSurfArea_area', 
       'lh.aparc.thickness', 'lh_bankssts_thickness',
       'lh_caudalanteriorcingulate_thickness',
       'lh_caudalmiddlefrontal_thickness', 'lh_cuneus_thickness',
@@ -171,7 +171,7 @@ recon-all-clinical: ['total_intracranial',
       'rh_temporalpole_thickness', 'rh_transversetemporal_thickness',
       'rh_insula_thickness', 'rh_MeanThickness_thickness',
       'total_cerebral_white_matter',
-      'total_cerebral_cortex',
+      'total_cerebral_cortex', 'lh_meanthickness_thickness', 
 ]
 
 minimorph: [
