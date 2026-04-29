@@ -2,7 +2,7 @@
 .env
 
 #data
-data
+./data/*
 
 #logs
 *.out

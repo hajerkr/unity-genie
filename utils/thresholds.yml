@@ -154,5 +154,60 @@ recon-all-clinical : {
         "ra_ctx_rh_transversetemporal",
         "ra_ctx_rh_insula",
         "ra_total_intracranial"
-    ]
+    ],
 }
+supersynth: {
+   
+        "thresholds": {
+            "ss_Right-Thalamus": 1.5,
+            "ss_Left-Thalamus": 1.5,
+            "ss_Right-Caudate": 1.5,
+            "ss_Left-Caudate": 1.5,
+            "ss_Right-Putamen": 1.5,
+            "ss_Left-Putamen": 1.5
+        },
+        "volumetric_cols":
+        
+        ['ss_3rd-Ventricle',
+        'ss_4th-Ventricle',
+        'ss_Brain-Stem',
+        'ss_CSF',
+        'ss_WM-hypointensities',
+        'ss_Optic-Chiasm',
+        'ss_Left-Cerebral-White-Matter',
+        'ss_Left-Cerebral-Cortex',
+        'ss_Left-Lateral-Ventricle',
+        'ss_Left-Inf-Lat-Vent',
+        'ss_Left-Cerebellum-White-Matter',
+        'ss_Left-Cerebellum-Cortex',
+        'ss_Left-Thalamus',
+        'ss_Left-Caudate',
+        'ss_Left-Putamen',
+        'ss_Left-Pallidum',
+        'ss_Left-Hippocampus',
+        'ss_Left-Amygdala',
+        'ss_Left-Accumbens-area',
+        'ss_Left-HypoThal-noMB',
+        'ss_Left-Fornix',
+        'ss_Left-MammillaryBody',
+        'ss_Left-Basal-Forebrain',
+        'ss_Left-SeptalNuc',
+        'ss_Right-Cerebral-White-Matter',
+        'ss_Right-Cerebral-Cortex',
+        'ss_Right-Lateral-Ventricle',
+        'ss_Right-Inf-Lat-Vent',
+        'ss_Right-Cerebellum-White-Matter',
+        'ss_Right-Cerebellum-Cortex',
+        'ss_Right-Thalamus',
+        'ss_Right-Caudate',
+        'ss_Right-Putamen',
+        'ss_Right-Pallidum',
+        'ss_Right-Hippocampus',
+        'ss_Right-Amygdala',
+        'ss_Right-Accumbens-area',
+        'ss_Right-HypoThal-noMB',
+        'ss_Right-Fornix',
+        'ss_Right-MammillaryBody',
+        'ss_Right-Basal-Forebrain',
+        'ss_Right-SeptalNuc']
+    }
