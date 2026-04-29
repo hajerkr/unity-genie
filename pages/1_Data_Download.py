@@ -431,4 +431,15 @@ if st.sidebar.button("Fetch derivatives"):
             with open(outdir, "rb") as f:
                 st.download_button("Download CSV", f, file_name=outdir)
 
+            #If there is only one project in the dataframe, find the project in flywheel and upload the file
+            unique_projects = st.session_state.df["project"].unique()
+            if len(unique_projects) == 1:
+                project_name = unique_projects[0]
+                project = fw.projects.find_first(f'label={project_name}')
+                print(f"Uploading {outdir} to Flywheel")
+                project.upload_file(outdir)
+                st.success(f"Uploaded {outdir} to Flywheel at {project.label}!")
+            else:
+                st.info("Multiple projects in the CSV, skipping Flywheel upload.")
+
 
