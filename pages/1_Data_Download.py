@@ -196,10 +196,10 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info , ke
             except Exception as e:
                 session = fw.get(session)
                 ses = session.reload()
-                ses_label = session.label
+                ses_label = ses.label
                 sub_label = session.subject.label
                 
-                st.warning(f"Failed {ses.subject.label} - {ses.label}: {e} ,  {traceback.format_exc()}")
+                st.warning(f"Failed {sub_label} - {ses_label}: {e} ,  {traceback.format_exc()}")
 
             progress.progress((i + 1) / len(sessions))
             status.text(f"Completed {i + 1}/{len(sessions)}")
@@ -276,8 +276,9 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     #Add projects separated by _ to the filename
     #Get all the unique values in df["project"] and concatenate them with _ in between
     unique_projects = st.session_state.df["project"].unique()
+    print(unique_projects)
     project_str = '_'.join(unique_projects)
-    
+
     #Add timestamp to the filename
     time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
 
