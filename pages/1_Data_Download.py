@@ -389,7 +389,7 @@ if st.sidebar.button("Fetch derivatives"):
     status = st.empty()
     
     for i, proj in enumerate(project_ids):
-        st.write(f"Fetching {", ".join(derivative_type)} for {proj}...")
+        st.write(f"Fetching {', '.join(derivative_type)} for {proj}...")
         # Connect to your Flywheel instance
         if after_date is None:
             after_date = datetime(2020, 1, 1, 0, 0, 0, 0, pytz.UTC)
