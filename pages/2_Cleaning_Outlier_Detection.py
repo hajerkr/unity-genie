@@ -172,8 +172,8 @@ def outlier_detection(
                     outliers_grouped[col] = np.nan
 
             outliers_grouped = outliers_grouped[
-                (outliers_grouped["n_roi_outliers_cov"] > 0) | (outliers_grouped["n_roi_outliers_zscore"] > 0)
-            ]
+                    (outliers_grouped["n_roi_outliers_cov"] >= 2) | (outliers_grouped["n_roi_outliers_zscore"] >= 2)
+                ]
 
         if not outliers.empty:
             outliers = pd.concat([outliers, outliers_grouped], ignore_index=True)
@@ -308,10 +308,15 @@ def _detect_outliers_for_input(
             f"Prefix '{prefix}': {len(missing)} volumetric columns not found in dataframe "
             f"(e.g. {missing[0]}). Skipping this input."
         )
-        return set(), pd.DataFrame()
+        return set(), set(), pd.DataFrame()
 
     # Build the columns_to_keep list with prefixed volumetric cols
     columns_to_keep = columns_to_keep_base + prefixed_vols
+
+    df_filt = df_filt[df_filt[prefixed_vols].notna().any(axis=1)].copy()
+    if df_filt.empty:
+        return set(), set(), pd.DataFrame()  # outliers, evaluated, df
+    evaluated_sessions = set(zip(df_filt["subject"], df_filt["session"]))
 
     df_input, outliers_df = outlier_detection(
         df_filt[columns_to_keep],
@@ -323,11 +328,11 @@ def _detect_outliers_for_input(
     )
 
     if outliers_df.empty:
-        return set(), pd.DataFrame()
+        return set(), set(), pd.DataFrame()
 
     outlier_sessions = set(zip(outliers_df["subject"], outliers_df["session"]))
     st.info(f"  → {prefix}: {len(outlier_sessions)} outlier sessions detected")
-    return outlier_sessions, outliers_df
+    return outlier_sessions, evaluated_sessions, outliers_df
 
 
 @st.cache_data
@@ -351,7 +356,7 @@ def process_outliers(df, df_demo, keywords):
     for segmentation_tool in keywords:
         st.write(f"#### Tool: {segmentation_tool}")
 
-        with open(os.path.join(work_dir, "..", "utils", "thresholds.yml"), "r") as f:
+        with open(os.path.join(work_dir.parent, "utils", "thresholds.yml"), "r") as f:
             threshold_dictionary = yaml.load(f, Loader=yaml.SafeLoader)
             outlier_thresholds = threshold_dictionary[segmentation_tool]["thresholds"]
             base_volumetric_cols = threshold_dictionary[segmentation_tool]["volumetric_cols"]
@@ -419,31 +424,23 @@ def process_outliers(df, df_demo, keywords):
         )
 
         outlier_sets = {}
-        outlier_dfs = {}  # per-prefix outliers_df, used for trend plots
+        evaluated_sets = {}
+        outlier_dfs = {}
         for prefix in tool_prefixes:
-            outlier_sets[prefix], outlier_dfs[prefix] = _detect_outliers_for_input(
-                df_filt,
-                prefix,
-                base_volumetric_cols,
-                outlier_thresholds,
-                columns_to_keep_base,
-            )
+            outlier_sets[prefix], evaluated_sets[prefix], outlier_dfs[prefix] = _detect_outliers_for_input(
+                                                df_filt,
+                                                prefix,
+                                                base_volumetric_cols,
+                                                outlier_thresholds,
+                                                columns_to_keep_base,
+                                            )
 
-        # Intersection: a session is a confirmed outlier only if flagged by ALL inputs.
-        # For single-input tools (e.g. supersynth with only MRR) this is just that
-        # one set — no intersection needed.
-        non_empty_sets = [s for s in outlier_sets.values() if len(s) > 0]
-        if len(non_empty_sets) == 0:
-            confirmed_outlier_sessions = set()
-        elif len(non_empty_sets) == 1:
-            confirmed_outlier_sessions = non_empty_sets[0]
-            if len(tool_prefixes) > 1:
-                st.warning(
-                    f"Only one input prefix returned results for {segmentation_tool}. "
-                    f"Using that input's outliers directly (no intersection)."
-                )
-        else:
-            confirmed_outlier_sessions = non_empty_sets[0].intersection(*non_empty_sets[1:])
+        # For each session, flag it only if ALL prefixes that have data for it agree it's an outlier
+        confirmed_outlier_sessions = set()
+        for session in set.union(*[s for s in evaluated_sets.values() if s]):
+            flagging_prefixes = [p for p in tool_prefixes if session in evaluated_sets[p]]
+            if flagging_prefixes and all(session in outlier_sets[p] for p in flagging_prefixes):
+                confirmed_outlier_sessions.add(session)
 
         n_confirmed = len(confirmed_outlier_sessions)
         st.info(
@@ -508,10 +505,10 @@ def process_outliers(df, df_demo, keywords):
             cols_to_save = [c for c in cols_to_save if not (c in seen or seen.add(c))]
             plot_df = plot_df[cols_to_save]
 
-            os.makedirs(os.path.join(work_dir, "..", "data"), exist_ok=True)
+            os.makedirs(os.path.join(work_dir.parent, "data"), exist_ok=True)
             projects_str = "-".join(str(p) for p in projects)
             tool_outliers_path = os.path.join(
-                work_dir, "..", "data",
+                work_dir.parent, "data",
                 f"{projects_str}_{segmentation_tool}_outliers.csv",
             )
             plot_df.to_csv(tool_outliers_path, index=False)
@@ -531,20 +528,47 @@ def process_outliers(df, df_demo, keywords):
         f"is_{tool}_outlier" for tool in keywords
         if f"is_{tool}_outlier" in df_out.columns
     ]
-
+    final_outliers_path = ""
     if len(active_flag_cols) > 1:
         # A session must be flagged by every tool to be a confirmed final outlier
-        df_out["is_outlier"] = df_out[active_flag_cols].all(axis=1)
+        # df_out["is_outlier"] = df_out[active_flag_cols].all(axis=1)
+
+        def is_cross_tool_outlier(row):
+            # only consider tools where this session has at least one non-NaN volumetric value
+            tool_suffix_map = {"minimorph": "mm", "recon-all-clinical": "ra"}
+            available_flags = []
+            for col in active_flag_cols:
+                tool = col.replace("is_", "").replace("_outlier", "")
+                suffix = tool_suffix_map.get(tool, tool)
+                # check if any prefixed volumetric col for this tool has data
+                has_data = any(
+                    pd.notna(row.get(c))
+                    for c in df_out.columns
+                    if re.match(rf"(GAMBAS|MRR)_{suffix}_", c)
+                )
+                if has_data:
+                    available_flags.append(row[col])
+            return all(available_flags) if available_flags else False
+
+        df_out["is_outlier"] = df_out.apply(is_cross_tool_outlier, axis=1)
         n_final = df_out["is_outlier"].sum()
         st.info(
             f"Cross-tool intersection ({' ∩ '.join(active_flag_cols)}): "
             f"{n_final} sessions flagged as final outliers"
         )
-    elif len(active_flag_cols) == 1:
-        # Only one tool selected — no intersection needed
-        df_out["is_outlier"] = df_out[active_flag_cols[0]]
 
-    return df_out, outlier_paths
+        final_outliers = df_out[df_out["is_outlier"]].copy()
+        final_outliers_path = os.path.join(work_dir.parent, "data", f"{projects_str}_final_intersection_outliers.csv")
+        final_outliers.to_csv(final_outliers_path, index=False)
+        
+
+    elif len(active_flag_cols) == 1:
+        df_out["is_outlier"] = df_out[active_flag_cols[0]]
+        final_outliers = df_out[df_out["is_outlier"]].copy()
+        final_outliers_path = os.path.join(work_dir.parent, "data", f"{projects_str}_final_intersection_outliers.csv")
+        final_outliers.to_csv(final_outliers_path, index=False)
+
+    return df_out, outlier_paths, final_outliers_path
 
 
 def main():
@@ -596,6 +620,7 @@ def main():
 
     uploaded_demo = st.file_uploader("Upload demographic CSV file (optional)", type=["csv"])
     df_demo = None
+    final_outliers_path  = ""
     if uploaded_demo is not None:
         df_demo = pd.read_csv(uploaded_demo)
         st.success("Demographic file uploaded successfully!")
@@ -617,21 +642,23 @@ def main():
             for project in unique_projects:
                 st.info(f"Processing project: {project}")
                 df_project = df[df["project"] == project]
-                processed, paths = process_outliers(df_project, df_demo, keywords)
+                processed, paths, final_outliers_path = process_outliers(df_project, df_demo, keywords)
                 st.session_state["processed_df"] = pd.concat(
                     [st.session_state["processed_df"], processed], ignore_index=True
                 )
                 st.session_state["outlier_paths"].extend(paths)
+                st.session_state["final_outlier_paths"] = final_outliers_path
                 progress.progress((np.where(unique_projects == project)[0][0] + 1) / len(unique_projects))
         else:
             st.info("Processing all projects together...")
-            processed, paths = process_outliers(df, df_demo, keywords)
+            processed, paths, final_outliers_path = process_outliers(df, df_demo, keywords)
             st.session_state["processed_df"] = processed
             st.session_state["outlier_paths"] = paths
+            st.session_state["final_outlier_paths"] = final_outliers_path
  
-        os.makedirs(os.path.join(work_dir, "..", "data"), exist_ok=True)
+        os.makedirs(os.path.join(work_dir.parent, "data"), exist_ok=True)
         st.session_state["processed_df"].to_csv(
-            os.path.join(work_dir, "..", "data", "allData_outlierFlagged.csv"), index=False
+            os.path.join(work_dir.parent, "data", "allData_outlierFlagged.csv"), index=False
         )
  
     # Render one download button per saved per-tool outlier CSV
@@ -647,6 +674,15 @@ def main():
                         file_name=filename,
                         key=f"dl_{filename}",
                     )
+        #Get projects_str
+        projects_str = "-".join(str(p) for p in unique_projects)
+        with open(st.session_state["final_outlier_paths"], "rb") as f:
+            st.download_button(
+                label=f"Download final intersection outliers",
+                data=f,
+                file_name=f"{projects_str}_final_intersection_outliers.csv",
+                key="dl_final_outliers",
+            )
 
     # ------------------------------------------------------------------
     # Step 2: Clean — same logic as before (intersect across tools)
@@ -677,7 +713,7 @@ def main():
         st.success("Outliers cleaned.")
         st.write(f"Size of dataframe after cleaning: {clean_df.shape}")
 
-        clean_path = os.path.join(work_dir, "..", "data", "alldata_cleaned.csv")
+        clean_path = os.path.join(work_dir.parent, "data", "alldata_cleaned.csv")
         cols = clean_df.columns.tolist()
         front_cols = [
             "project", "subject", "session", "childTimepointAge_months",
