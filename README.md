@@ -34,28 +34,34 @@ Install with:
 pip install -r requirements.txt
 ```
 
-Authentication
+Or use the provided `start.sh` to set up and launch in one step (see [Usage](#usage)).
 
-This tool requires an API key to access data. The API key should be stored in a .env file in the root of the repository.
+### Authentication
 
-1. Create a .env file
-2. Add your API key to the file:
+This tool requires a Flywheel API key. The recommended setup for new users is a `.env` file:
+
+1. On first run, `start.sh` creates `.env` automatically from `.env_example`
+2. Open `.env` and replace the placeholder:
 ```
-API_KEY=your_api_key_here
+FW_CLI_API_KEY=your_api_key_here
 ```
+3. Re-run `bash start.sh` — the app will authenticate silently.
 
-The app automatically loads this file using python-dotenv
-.
+> Advanced: if `FW_CLI_API_KEY` is already exported in your shell (e.g. `.zshrc`), no `.env` is needed.
 
-⚠️ Do not commit your .env file to GitHub. Make sure .gitignore includes it.
+⚠️ Do not commit `.env` to GitHub — it is already listed in `.gitignore`.
 
 ### Usage
 
 To run this app locally:
 
-Run the Streamlit app:
+```bash
+bash start.sh
 ```
-streamlit run app.py
+
+This will create a `.venv` if one does not exist, install dependencies, and launch the app. Or run manually:
+```
+streamlit run Home.py
 ```
 
 This will open a local web interface in your browser.
@@ -79,5 +85,5 @@ If extending the app, keep API key handling through .env for security.
 
 For debugging, run the app with:
 ```
-streamlit run app.py --logger.level=debug
+streamlit run Home.py --logger.level=debug
 ```
