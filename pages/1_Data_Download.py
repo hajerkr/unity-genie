@@ -171,7 +171,7 @@ def download_session_data(project, session, project_path, segtool, input_source,
                 #     #Concat the dataframes horizontally, keeping all rows (outer join)
                 #     session_df = pd.merge(session_df, df_to_merge, how='outer')
 
-                #os.remove(download_path)
+                os.remove(download_path)
 
         #print(session_df.values)
         #Turn dataframe into list 
@@ -375,7 +375,7 @@ recon_any = st.sidebar.checkbox("Recon-any", value=False)
 
 # derivative_type = st.sidebar.radio("Segmentation Tool:", ["recon-all-clinical", "minimorph","Both"])
 #Add radio button yes or no to include flywheel session information in the download
-st.session_state.input_source = st.sidebar.radio("Structural Image Segmented:", ["MRR", "Enhanced (Gambas)", "Both"], index=0)
+st.session_state.input_source = st.sidebar.radio("Structural Image Segmented:", ["MRR", "Enhanced (Gambas)"], index=0)
 st.session_state.fw_session_info = st.sidebar.radio("Include Flywheel Session Info (tags, custom info) in download?", ["No", "Yes"], index=0)
 
 # if st.sidebar.button("Fetch derivatives"):
