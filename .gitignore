@@ -3,8 +3,8 @@
 .venv
 
 #data
-./data/*
-
+data/
+ 
 #logs
 *.out
 *.log
