@@ -8,8 +8,8 @@ import pathlib
 from pathlib import Path
 from utils.authentication import login_screen
 
-# Load variables from .env into environment
-load_dotenv(override=True)
+# Load variables from .env into environment (no override: shell env vars take precedence)
+load_dotenv()
 
 import sys
 import subprocess
@@ -65,7 +65,7 @@ def main_app():
 
 if not st.session_state.authenticated:
     #Get API from env 
-    api_key = None #os.getenv("FW_CLI_API_KEY")
+    api_key = os.getenv("FW_CLI_API_KEY")
     if api_key:
         st.session_state.api_key = api_key
         st.session_state.fw = flywheel.Client(api_key)
