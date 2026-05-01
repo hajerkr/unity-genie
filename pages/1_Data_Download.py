@@ -201,7 +201,7 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info , ke
     sessions = [s.id for s in project.sessions() if not s.subject.label.startswith('137-')]
     if debug:
         sessions = sessions[:5]
-    progress = st.progress(0)
+    progress_s = st.progress(0)
     status = st.empty()
     all_frames = []
     max_workers = min(4, len(sessions))  # Limit number of threads to avoid overwhelming the system
@@ -210,7 +210,7 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info , ke
         tool_map = yaml.load(f, Loader=yaml.SafeLoader)
     print(segtool)
 
-    for session_id in sessions:
+    for i, session_id in enumerate(sessions):
         try:
             session_df = download_session_data(
                 project, session_id, project_path, segtool, 
@@ -223,7 +223,7 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info , ke
         except Exception as e:
             st.warning(f"Failed {session_id}: {e}\n{traceback.format_exc()}")
         
-        progress.progress((i + 1) / len(sessions))
+        progress_s.progress((i + 1) / len(sessions))
         status.text(f"Completed {i + 1}/{len(sessions)}")
 
     # with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -453,7 +453,7 @@ if st.sidebar.button("Fetch derivatives"):
     
     derivative_paths = []
     
-    progress = st.progress(0)
+    progress_p = st.progress(0)
     status = st.empty()
     
     for i, proj in enumerate(project_ids):
@@ -481,7 +481,7 @@ if st.sidebar.button("Fetch derivatives"):
         #derivatives.to_csv(f"/Users/Hajer/unity/debugging/derivatives_{proj}.csv", index=False)
         if derivatives:
             derivative_paths.extend([derivatives])
-        progress.progress((i+1)/len(project_ids))
+        progress_p.progress((i+1)/len(project_ids))
     
 
     if not derivative_paths:
