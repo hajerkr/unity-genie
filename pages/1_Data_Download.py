@@ -157,8 +157,8 @@ def download_session_data(project, session, project_path, segtool, input_source,
                         how='outer'
                     )
 
-                    print(session_df.shape)
-                    print(session_df.values)
+                    # print(session_df.shape)
+                    # print(session_df.values)
 
                 # else:
                 #     print(f"Session {ses_label} - merging {file.name} into session_df")
@@ -209,33 +209,50 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info , ke
     with open(os.path.join(work_dir, '..', "utils", "vol_columns.yml"), "r") as f:
         tool_map = yaml.load(f, Loader=yaml.SafeLoader)
     print(segtool)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_session = {
-            executor.submit(
-                download_session_data,
-                project, session_id, project_path, segtool, input_source, fw_session_info, keywords, work_dir, tool_map
-            ): session_id
-            for session_id in sessions
-        }
 
-        for i, future in enumerate(concurrent.futures.as_completed(future_to_session)):
-            session = future_to_session[future]
-            try:
-                session_df = future.result()
-                print(f"Session {session} processed, session_df shape: {session_df.shape if session_df is not None else 'None'}")
-                if session_df is not None:
-                    all_frames.append(session_df)   # one df per session, stack vertically at the end
-                    print(all_frames)
-            except Exception as e:
-                session = fw.get(session)
-                ses = session.reload()
-                ses_label = ses.label
-                sub_label = session.subject.label
+    for session_id in sessions:
+        try:
+            session_df = download_session_data(
+                project, session_id, project_path, segtool, 
+                input_source, fw_session_info, keywords, work_dir, tool_map
+            )
+            print(f"Session {session_id} processed, shape: {session_df.shape if session_df is not None else 'None'}")
+            if session_df is not None:
+                all_frames.append(session_df)
+                print(f"Appended session {session_id} data, total frames: {len(all_frames)}")
+        except Exception as e:
+            st.warning(f"Failed {session_id}: {e}\n{traceback.format_exc()}")
+        
+        progress.progress((i + 1) / len(sessions))
+        status.text(f"Completed {i + 1}/{len(sessions)}")
+
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    #     future_to_session = {
+    #         executor.submit(
+    #             download_session_data,
+    #             project, session_id, project_path, segtool, input_source, fw_session_info, keywords, work_dir, tool_map
+    #         ): session_id
+    #         for session_id in sessions
+    #     }
+
+    #     for i, future in enumerate(concurrent.futures.as_completed(future_to_session)):
+    #         session = future_to_session[future]
+    #         try:
+    #             session_df = future.result()
+    #             print(f"Session {session} processed, session_df shape: {session_df.shape if session_df is not None else 'None'}")
+    #             if session_df is not None:
+    #                 all_frames.append(session_df)   # one df per session, stack vertically at the end
+    #                 print(all_frames)
+    #         except Exception as e:
+    #             session = fw.get(session)
+    #             ses = session.reload()
+    #             ses_label = ses.label
+    #             sub_label = session.subject.label
                 
-                st.warning(f"Failed {sub_label} - {ses_label}: {e} ,  {traceback.format_exc()}")
+    #             st.warning(f"Failed {sub_label} - {ses_label}: {e} ,  {traceback.format_exc()}")
 
-            progress.progress((i + 1) / len(sessions))
-            status.text(f"Completed {i + 1}/{len(sessions)}")
+    #         progress.progress((i + 1) / len(sessions))
+    #         status.text(f"Completed {i + 1}/{len(sessions)}")
 
     if not all_frames:
         st.warning("No results found.")
@@ -422,10 +439,12 @@ if minimorph:
     keywords.extend(["volumes"])
 if supersynth:
     derivative_type.append("supersynth")
-    keywords.extend(["volumes"])
 if recon_any:
     derivative_type.append("recon-any")
     
+
+if minimorph or supersynth:
+    keywords.extend(["volumes"])
 
 #Add debugger button to only fetch a handful of sessions for testing
 debug = st.sidebar.checkbox("Debug mode (fetch fewer sessions)", value=False)
