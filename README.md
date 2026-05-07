@@ -41,7 +41,7 @@ This tool requires an API key to access data. The API key should be stored in a 
 1. Create a .env file
 2. Add your API key to the file:
 ```
-API_KEY=your_api_key_here
+FW_CLI_API_KEY=your_api_key_here
 ```
 
 The app automatically loads this file using python-dotenv
@@ -53,9 +53,14 @@ The app automatically loads this file using python-dotenv
 
 To run this app locally:
 
+Preferred startup (creates `.env` from `.env_example` if needed, creates `.venv`, installs dependencies):
+```
+bash start.sh
+```
+
 Run the Streamlit app:
 ```
-streamlit run app.py
+streamlit run Home.py
 ```
 
 This will open a local web interface in your browser.
@@ -79,5 +84,5 @@ If extending the app, keep API key handling through .env for security.
 
 For debugging, run the app with:
 ```
-streamlit run app.py --logger.level=debug
+streamlit run Home.py --logger.level=debug
 ```
