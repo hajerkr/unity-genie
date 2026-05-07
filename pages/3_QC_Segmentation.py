@@ -321,7 +321,6 @@ def save_rating(ratings_file, responses, project, metrics):
 
 
 def check_previous_reviews(project, username):
-    project   = fw.projects.find_first("label=CapeTown26-sprint").reload()
     filtered  = [
         a for a in project.analyses
         if username.replace(" ", "_").lower() in a.label.lower()
@@ -331,6 +330,7 @@ def check_previous_reviews(project, username):
     if filtered:
         latest       = filtered[-1]
         user_asys_id = latest.id
+        st.session_state.asys = latest
         csv_files    = [f for f in latest.files if f.name.endswith(".csv")]
         if csv_files:
             dl_dir = os.path.join(Path(__file__).parent, "..", "data")
@@ -436,6 +436,16 @@ def qc_subject(row, segmentation_tool, metrics, media_placeholder):
 
             ratings_file = os.path.join(download_dir, get_ratings_filename())
             save_rating(ratings_file, st.session_state.responses, None, metrics)
+
+            if st.session_state.asys is None:
+                project = fw.projects.find_first(f"label={project_label}").reload()
+                analysis = project.add_analysis(
+                    label=(
+                        f"Segmentation_QC_{st.session_state.segmentation_tool}_"
+                        f"{st.session_state.username.replace(' ', '_')}"
+                    )
+                )
+                st.session_state.asys = analysis
             st.session_state.asys.upload_file(ratings_file)
 
             at_end = st.session_state.row == len(df_out.index) - 1
@@ -461,6 +471,7 @@ _defaults = {
     "api_key":        None,
     "row":            None,
     "df_outliers":    None,
+    "asys":           None,
     "uploaded_outliers_sig": "",
     "username":       "",
     "segmentation_tool": None,
