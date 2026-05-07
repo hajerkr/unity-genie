@@ -238,7 +238,13 @@ def plot_outlier_trend(outliers_df, keyword):
 def cleaning_procedure(df_outlier_flag, MM_vols, RA_vols):
 
     st.info(f"Original size .. {df_outlier_flag.shape}")
-    dup_keys = ["project", "subject", "session", "childTimepointAge_months", "MRR_acquisition", "GAMBAS_acquisition"]
+    dup_keys = [
+        c for c in [
+            "project", "subject", "session", "childTimepointAge_months",
+            "MRR_acquisition", "GAMBAS_acquisition",
+        ]
+        if c in df_outlier_flag.columns
+    ]
     volume_cols = [c for c in df_outlier_flag.columns if c.startswith("mm") or c.startswith("ra")]
 
     # is_outlier is the cross-tool intersection already computed in process_outliers.
@@ -298,22 +304,30 @@ def _detect_outliers_for_input(
 
     Returns an empty set if the prefixed columns are not present in df_filt.
     """
-    # Build prefixed column names
-    prefixed_vols = [f"{prefix}_{col}" for col in base_volumetric_cols]
-    prefixed_thresholds = {f"{prefix}_{k}": v for k, v in outlier_thresholds.items()}
+    # Prefer prefixed columns (e.g. MRR_mm_*) but gracefully fallback to
+    # unprefixed columns (e.g. mm_*) when the uploaded CSV has no input prefixes.
+    if prefix == "RAW":
+        selected_vols = [c for c in base_volumetric_cols if c in df_filt.columns]
+        selected_thresholds = {k: v for k, v in outlier_thresholds.items() if k in selected_vols}
+        if not selected_vols:
+            return set(), set(), pd.DataFrame()
+        st.info("Using unprefixed volumetric columns for outlier detection.")
+    else:
+        prefixed_vols = [f"{prefix}_{col}" for col in base_volumetric_cols]
+        selected_vols = [c for c in prefixed_vols if c in df_filt.columns]
+        selected_thresholds = {f"{prefix}_{k}": v for k, v in outlier_thresholds.items() if f"{prefix}_{k}" in selected_vols}
+        if not selected_vols:
+            missing = [c for c in prefixed_vols if c not in df_filt.columns]
+            st.warning(
+                f"Prefix '{prefix}': {len(missing)} volumetric columns not found in dataframe "
+                f"(e.g. {missing[0]}). Skipping this input."
+            )
+            return set(), set(), pd.DataFrame()
 
-    missing = [c for c in prefixed_vols if c not in df_filt.columns]
-    if missing:
-        st.warning(
-            f"Prefix '{prefix}': {len(missing)} volumetric columns not found in dataframe "
-            f"(e.g. {missing[0]}). Skipping this input."
-        )
-        return set(), set(), pd.DataFrame()
+    # Keep only columns that exist to avoid KeyError on sparse schemas.
+    columns_to_keep = [c for c in (columns_to_keep_base + selected_vols) if c in df_filt.columns]
 
-    # Build the columns_to_keep list with prefixed volumetric cols
-    columns_to_keep = columns_to_keep_base + prefixed_vols
-
-    df_filt = df_filt[df_filt[prefixed_vols].notna().any(axis=1)].copy()
+    df_filt = df_filt[df_filt[selected_vols].notna().any(axis=1)].copy()
     if df_filt.empty:
         return set(), set(), pd.DataFrame()  # outliers, evaluated, df
     evaluated_sessions = set(zip(df_filt["subject"], df_filt["session"]))
@@ -321,10 +335,10 @@ def _detect_outliers_for_input(
     df_input, outliers_df = outlier_detection(
         df_filt[columns_to_keep],
         age_column="age_in_months",
-        volumetric_columns=prefixed_vols,
+        volumetric_columns=selected_vols,
         misc_columns=columns_to_keep,
-        cov_thresholds=prefixed_thresholds,
-        zscore_thresholds=prefixed_thresholds,
+        cov_thresholds=selected_thresholds,
+        zscore_thresholds=selected_thresholds,
     )
 
     if outliers_df.empty:
@@ -350,6 +364,7 @@ def process_outliers(df, df_demo, keywords):
     """
     key_cols = ["subject", "session", "project"]
     projects = df["project"].unique()
+    projects_str = "-".join(str(p) for p in projects)
     df_out = df.copy()
     outlier_paths = []  # 
 
@@ -388,8 +403,11 @@ def process_outliers(df, df_demo, keywords):
         # outlier_detection, regardless of which input prefix is being processed.
         columns_to_keep_base = [
             "project", "subject", "session", "age_in_months",
-            "childBiologicalSex", "MRR_acquisition", "GAMBAS_acquisition","session_qc",
+            "childBiologicalSex", "session_qc",
         ]
+        for acq_col in ["MRR_acquisition", "GAMBAS_acquisition", "acquisition"]:
+            if acq_col in df_merged.columns:
+                columns_to_keep_base.append(acq_col)
         # Add analysis IDs for all tools so they are preserved in the output
         suffix_map = {"minimorph": "mm", "recon-all-clinical": "ra", "supersynth": "ss"}
         TOOL_INPUT_PREFIXES = {
@@ -400,8 +418,12 @@ def process_outliers(df, df_demo, keywords):
 
         INPUT_PREFIXES = ["GAMBAS", "MRR"]
         for seg in keywords:
+            seg_suffix = suffix_map.get(seg, seg)
+            unprefixed_aid_col = f"analysis_id_{seg_suffix}"
+            if unprefixed_aid_col in df_merged.columns:
+                columns_to_keep_base.append(unprefixed_aid_col)
             for pfx in INPUT_PREFIXES:
-                aid_col = f"{pfx}_analysis_id_{suffix_map.get(seg, seg)}"
+                aid_col = f"{pfx}_analysis_id_{seg_suffix}"
                 if aid_col in df_merged.columns:
                     columns_to_keep_base.append(aid_col)
         if "input_gear_v" in df_merged.columns:
@@ -418,6 +440,14 @@ def process_outliers(df, df_demo, keywords):
         # Step 1 — outlier detection per input, then intersect
         # ------------------------------------------------------------------
         tool_prefixes = TOOL_INPUT_PREFIXES.get(segmentation_tool, ["GAMBAS", "MRR"])
+        has_prefixed_cols = any(
+            any(f"{pfx}_{c}" in df_filt.columns for c in base_volumetric_cols)
+            for pfx in tool_prefixes
+        )
+        has_unprefixed_cols = any(c in df_filt.columns for c in base_volumetric_cols)
+        if (not has_prefixed_cols) and has_unprefixed_cols:
+            tool_prefixes = ["RAW"]
+
         st.info(
             f"Running outlier detection for {segmentation_tool} "
             f"on each input ({', '.join(tool_prefixes)}) separately..."
@@ -437,7 +467,8 @@ def process_outliers(df, df_demo, keywords):
 
         # For each session, flag it only if ALL prefixes that have data for it agree it's an outlier
         confirmed_outlier_sessions = set()
-        for session in set.union(*[s for s in evaluated_sets.values() if s]):
+        non_empty = [s for s in evaluated_sets.values() if s]
+        for session in (set.union(*non_empty) if non_empty else set()):
             flagging_prefixes = [p for p in tool_prefixes if session in evaluated_sets[p]]
             if flagging_prefixes and all(session in outlier_sets[p] for p in flagging_prefixes):
                 confirmed_outlier_sessions.add(session)
@@ -445,7 +476,7 @@ def process_outliers(df, df_demo, keywords):
         n_confirmed = len(confirmed_outlier_sessions)
         st.info(
             f"Confirmed outliers for {segmentation_tool} "
-            f"(intersection across {', '.join(INPUT_PREFIXES)}): {n_confirmed}"
+            f"(intersection across {', '.join(tool_prefixes)}): {n_confirmed}"
         )
 
         # ------------------------------------------------------------------
@@ -470,13 +501,23 @@ def process_outliers(df, df_demo, keywords):
             tool_suffix = suffix_map.get(segmentation_tool, segmentation_tool)
             identity_cols = ["project", "subject", "session", "age_in_months",
                              "childBiologicalSex", "session_qc"]
-            # acquisition and analysis_id columns for this tool's prefixes only
+            # acquisition and analysis_id columns for this tool's available schema
             for pfx in tool_prefixes:
                 for extra in [f"{pfx}_acquisition",
                               f"{pfx}_analysis_id_{tool_suffix}",
                               f"{pfx}_gear_v_{segmentation_tool}"]:
                     if extra in df_filt.columns:
                         identity_cols.append(extra)
+            for extra in [
+                "acquisition",
+                f"analysis_id_{tool_suffix}",
+                f"gear_v_{segmentation_tool}",
+                "gear_v_minimorph",
+                "gear_v_recon_all",
+                "gear_v_supersynth",
+            ]:
+                if extra in df_filt.columns:
+                    identity_cols.append(extra)
 
             plot_df = pd.concat(
                 [odf for odf in outlier_dfs.values() if not odf.empty],
@@ -559,13 +600,14 @@ def process_outliers(df, df_demo, keywords):
 
         final_outliers = df_out[df_out["is_outlier"]].copy()
         final_outliers_path = os.path.join(work_dir.parent, "data", f"{projects_str}_final_intersection_outliers.csv")
+        os.makedirs(os.path.dirname(final_outliers_path), exist_ok=True)
         final_outliers.to_csv(final_outliers_path, index=False)
-        
 
     elif len(active_flag_cols) == 1:
         df_out["is_outlier"] = df_out[active_flag_cols[0]]
         final_outliers = df_out[df_out["is_outlier"]].copy()
         final_outliers_path = os.path.join(work_dir.parent, "data", f"{projects_str}_final_intersection_outliers.csv")
+        os.makedirs(os.path.dirname(final_outliers_path), exist_ok=True)
         final_outliers.to_csv(final_outliers_path, index=False)
 
     return df_out, outlier_paths, final_outliers_path
