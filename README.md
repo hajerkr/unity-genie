@@ -20,6 +20,10 @@ This repository provides a workflow for downloading and aggregating neuroimaging
 * Assess and record the quality of the segmented regions 
 * Produce a csv report on the QC'ed segmentations
 
+Step 2 -> Step 3 compatibility:
+* Outlier CSVs from Cleaning/Outlier Detection are accepted with either prefixed analysis-id columns (`MRR_analysis_id_mm`, `GAMBAS_analysis_id_mm`) or unprefixed columns (`analysis_id_mm` / `analysis_id_ra`).
+* QC Segmentation auto-detects analysis-id column variants and normalizes uploaded CSV headers.
+
 #### Batch runs
 * Submit batch jobs at the project level
 * _(Coming soon) Upload a CSV specifying session to process_
@@ -41,7 +45,7 @@ This tool requires an API key to access data. The API key should be stored in a 
 1. Create a .env file
 2. Add your API key to the file:
 ```
-API_KEY=your_api_key_here
+FW_CLI_API_KEY=your_api_key_here
 ```
 
 The app automatically loads this file using python-dotenv
@@ -53,9 +57,14 @@ The app automatically loads this file using python-dotenv
 
 To run this app locally:
 
+Preferred startup (creates `.env` from `.env_example` if needed, creates `.venv`, installs dependencies):
+```
+bash start.sh
+```
+
 Run the Streamlit app:
 ```
-streamlit run app.py
+streamlit run Home.py
 ```
 
 This will open a local web interface in your browser.
@@ -79,5 +88,15 @@ If extending the app, keep API key handling through .env for security.
 
 For debugging, run the app with:
 ```
-streamlit run app.py --logger.level=debug
+streamlit run Home.py --logger.level=debug
 ```
+
+### Troubleshooting
+
+If Segmentation QC reports missing analysis-id columns even though your CSV includes them:
+
+1. Re-upload the CSV in Step 3 after regenerating it in Step 2.
+2. If the issue persists, restart Streamlit to clear session state and upload again.
+
+Common fix included in this repo:
+* Uploaded CSV headers are normalized (trimmed and BOM-stripped), and file reload is triggered when a new file is selected.

@@ -1,8 +1,9 @@
 #environment variables
 .env
+.venv
 
 #data
-./data/*
+data
 
 #logs
 *.out

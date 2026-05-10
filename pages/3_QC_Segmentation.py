@@ -218,13 +218,42 @@ def get_data(sub_label, ses_label, asys_id, seg_gear, download_dir, project):
         print(f"Exception for {sub_label} {ses_label}: {e}")
 
 
+def get_analysis_id_columns(segmentation_tool, available_columns=None):
+    suffix = "ra" if segmentation_tool == "recon-all-clinical" else "mm"
+    preferred = [
+        f"MRR_analysis_id_{suffix}",
+        f"GAMBAS_analysis_id_{suffix}",
+        f"analysis_id_{suffix}",
+    ]
+    if available_columns is None:
+        return preferred
+
+    cols = list(available_columns)
+    detected = [
+        c for c in cols
+        if "analysis_id" in c.lower()
+        and re.search(rf"(^|[_-]){suffix}($|[_-])", c.lower())
+    ]
+    ordered = [c for c in preferred if c in cols]
+    for c in detected:
+        if c not in ordered:
+            ordered.append(c)
+    return ordered
+
+
 def process_subject_row(row, segmentation_tool, segmentation_suffix, download_dir, fw, api_key, viz_mode):
     """Download NIfTI files and generate MP4 or PNG for one subject."""
     try:
         sub_label, ses_label = row["subject"], row["session"]
         project_label        = row["project"].strip()
-        prefix               = "ra" if segmentation_tool == "recon-all-clinical" else "mm"
-        asys_id              = row.get(f"MRR_analysis_id_{prefix}", None)
+        asys_id = None
+        for col in get_analysis_id_columns(segmentation_tool, row.index):
+            val = row.get(col, None)
+            if pd.notna(val):
+                asys_id = val
+                break
+        if asys_id is None:
+            return f"{sub_label}-{ses_label}: missing analysis id"
 
         project = fw.projects.find_first(f"label={project_label}").reload()
         get_data(sub_label, ses_label, asys_id, segmentation_tool, download_dir, project)
@@ -292,7 +321,6 @@ def save_rating(ratings_file, responses, project, metrics):
 
 
 def check_previous_reviews(project, username):
-    project   = fw.projects.find_first("label=CapeTown26-sprint").reload()
     filtered  = [
         a for a in project.analyses
         if username.replace(" ", "_").lower() in a.label.lower()
@@ -302,6 +330,7 @@ def check_previous_reviews(project, username):
     if filtered:
         latest       = filtered[-1]
         user_asys_id = latest.id
+        st.session_state.asys = latest
         csv_files    = [f for f in latest.files if f.name.endswith(".csv")]
         if csv_files:
             dl_dir = os.path.join(Path(__file__).parent, "..", "data")
@@ -407,6 +436,16 @@ def qc_subject(row, segmentation_tool, metrics, media_placeholder):
 
             ratings_file = os.path.join(download_dir, get_ratings_filename())
             save_rating(ratings_file, st.session_state.responses, None, metrics)
+
+            if st.session_state.asys is None:
+                project = fw.projects.find_first(f"label={project_label}").reload()
+                analysis = project.add_analysis(
+                    label=(
+                        f"Segmentation_QC_{st.session_state.segmentation_tool}_"
+                        f"{st.session_state.username.replace(' ', '_')}"
+                    )
+                )
+                st.session_state.asys = analysis
             st.session_state.asys.upload_file(ratings_file)
 
             at_end = st.session_state.row == len(df_out.index) - 1
@@ -432,6 +471,8 @@ _defaults = {
     "api_key":        None,
     "row":            None,
     "df_outliers":    None,
+    "asys":           None,
+    "uploaded_outliers_sig": "",
     "username":       "",
     "segmentation_tool": None,
     "viz_mode":       "mp4",
@@ -487,10 +528,24 @@ with st.sidebar:
 # --- File upload ------------------------------------------------------------
 uploaded_outliers = st.file_uploader("📂 Upload outlier CSV", type=["csv"])
 
-if uploaded_outliers is not None and st.session_state.row is None:
-    st.session_state.df_outliers  = pd.read_csv(uploaded_outliers)
-    st.session_state.row          = 0
-    st.session_state.data_prepared = False   # reset so download re-runs if file changes
+if uploaded_outliers is not None:
+    upload_sig = f"{uploaded_outliers.name}:{uploaded_outliers.size}"
+    should_reload = (
+        st.session_state.df_outliers is None
+        or st.session_state.uploaded_outliers_sig != upload_sig
+    )
+
+    if should_reload:
+        df_uploaded = pd.read_csv(uploaded_outliers)
+        df_uploaded.columns = [
+            str(c).replace("\ufeff", "").strip().replace(" ", "_")
+            for c in df_uploaded.columns
+        ]
+        st.session_state.df_outliers = df_uploaded
+        st.session_state.uploaded_outliers_sig = upload_sig
+        st.session_state.row = 0
+        st.session_state.data_prepared = False   # reset so download re-runs if file changes
+
     st.write(
         f"Loaded **{st.session_state.df_outliers.shape[0]}** subjects × "
         f"**{st.session_state.df_outliers.shape[1]}** columns"
@@ -538,9 +593,22 @@ if ready:
                 )
                 st.write(f"Remaining: **{st.session_state.df_outliers.shape[0]}** subjects")
 
-            prefix      = "ra" if segmentation_tool == "recon-all-clinical" else "mm"
-            asys_id_col = f"MRR_analysis_id_{prefix}"
-            st.session_state.df_outliers.dropna(subset=[asys_id_col], inplace=True)
+            asys_id_cols = get_analysis_id_columns(
+                segmentation_tool,
+                st.session_state.df_outliers.columns,
+            )
+            if not asys_id_cols:
+                analysis_like_cols = [
+                    c for c in st.session_state.df_outliers.columns
+                    if "analysis_id" in c.lower()
+                ]
+                st.error(
+                    "Missing analysis-id columns for selected segmentation tool. "
+                    f"Expected one of: {', '.join(get_analysis_id_columns(segmentation_tool))}. "
+                    f"Found analysis-id-like columns: {', '.join(analysis_like_cols) if analysis_like_cols else 'none'}"
+                )
+                st.stop()
+            st.session_state.df_outliers.dropna(subset=asys_id_cols, how="all", inplace=True)
 
             rows         = [r for _, r in st.session_state.df_outliers.iterrows()]
             total        = len(rows)
