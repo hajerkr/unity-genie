@@ -1,6 +1,7 @@
 #Impute age if it's missing, using the shared utils
 import pandas as pd
 import streamlit as st
+import numpy as np
 
 # from shared.utils.curate_output import demo
 
@@ -119,6 +120,201 @@ def threshold_outlier_detection(data, skip_covariance=False, thresholds: dict = 
     return cov_differences.reset_index(drop=True)
 
 
+def compute_cost_prefix_sums(x):
+    """
+    Precompute prefix sums for efficient cost calculation.
+    
+    Args:
+        x: array of values
+    
+    Returns:
+        prefix_sum: cumulative sum of x
+        prefix_sum_sq: cumulative sum of x squared
+    """
+    x = np.array(x, dtype=float)
+    prefix_sum = np.cumsum(x)
+    prefix_sum_sq = np.cumsum(x**2)
+    return prefix_sum, prefix_sum_sq
+
+def interval_cost(prefix_sum, prefix_sum_sq, i, j, alpha=0.0):
+    """
+    Calculate cost of binning elements x[i:j] together.
+    Cost = variance + penalty for small bins.
+    
+    Args:
+        prefix_sum, prefix_sum_sq: precomputed prefix sums
+        i, j: bin range (i inclusive, j exclusive)
+        alpha: penalty coefficient for small bins
+    
+    Returns:
+        cost: total cost for this bin
+    """
+    n = j - i
+    if n <= 0:
+        return np.inf
+
+    s = prefix_sum[j-1] - (prefix_sum[i-1] if i > 0 else 0)
+    s2 = prefix_sum_sq[j-1] - (prefix_sum_sq[i-1] if i > 0 else 0)
+    mean = s / n
+
+    # Variance-based cost
+    base_cost = s2 - 2 * mean * s + n * mean**2
+    penalty = alpha / n if alpha > 0 else 0.0
+
+    return base_cost + penalty
+
+
+def optimal_binning_min_size(x, k, min_bin_size, alpha=0.0, beta=25, gamma=50):
+    """
+    Find optimal k bins for data x using dynamic programming.
+    
+    Args:
+        x: data to bin
+        k: number of bins
+        min_bin_size: minimum elements per bin
+        alpha: small bin penalty
+        beta: width penalty coefficient
+        gamma: boundary penalty coefficient
+    
+    Returns:
+        boundaries: list of (start_idx, end_idx) tuples
+        cost: total optimization cost
+        sorted_ages: sorted input data
+        bins: list of (min_val, max_val) tuples per bin
+    """
+    x = sorted(x)
+    n = len(x)
+    if n == 0:
+        raise ValueError("Input data is empty.")
+        st.warning("Input data is empty. Returning no bins.")
+    
+    
+
+    if n < k * min_bin_size:
+        raise ValueError(
+            f"Not enough samples ({n}) for {k} bins with min size {min_bin_size}"
+        )
+
+    prefix_sum, prefix_sum_sq = compute_cost_prefix_sums(x)
+    
+    # DP tables: dp[j] = min cost to bin first j elements
+    dp_prev = np.full(n + 1, np.inf)
+    dp_curr = np.full(n + 1, np.inf)
+    backtrack = np.full((k + 1, n + 1), -1, dtype=int)
+    dp_prev[0] = 0.0
+
+    # Fill DP table for each bin count
+    for bins in range(1, k + 1):
+        dp_curr[:] = np.inf
+
+        for j in range(1, n + 1):
+            # Valid range for previous bin endpoint
+            i_min = max(bins - 1, j - (n - (k - bins) * min_bin_size))
+            i_max = j - min_bin_size
+            if i_max < i_min:
+                continue
+
+            for i in range(i_min, i_max + 1):
+                prev_cost = dp_prev[i]
+                if not np.isfinite(prev_cost):
+                    continue
+
+                # Width penalty: penalize narrow bins
+                if i > 0:
+                    bin_width = x[j-1] - x[i]
+                    width_penalty = beta / max(bin_width, 1e-9)
+                else:
+                    width_penalty = 0.0
+
+                cost = (
+                    prev_cost
+                    + interval_cost(prefix_sum, prefix_sum_sq, i, j, alpha)
+                    + width_penalty
+                    + gamma * (i - 1)
+                )
+
+                if cost < dp_curr[j]:
+                    dp_curr[j] = cost
+                    backtrack[bins, j] = i
+
+        dp_prev, dp_curr = dp_curr, dp_prev
+
+    if not np.isfinite(dp_prev[n]):
+        raise RuntimeError("No feasible binning found with given constraints.")
+
+    # Reconstruct bin boundaries via backtracking
+    boundaries = []
+    curr = n
+    for bins in range(k, 0, -1):
+        prev = backtrack[bins, curr]
+        if prev < 0:
+            raise RuntimeError("Backtracking failed; constraints likely inconsistent.")
+        boundaries.append((prev, curr))
+        curr = prev
+
+    boundaries.reverse()
+    bins_list = [(x[i], x[j-1]) for i, j in boundaries]
+    return boundaries, dp_prev[n], x, bins_list
+
+
+def find_optimal_number_of_bins(x, min_k, max_k, min_bin_size, alpha=0.0, beta=25, gamma=50):
+    """
+    Search for optimal number of bins in range [min_k, max_k].
+    
+    Returns:
+        best_boundaries, best_cost, best_sorted, best_bins
+    """
+    best_k = None
+    best_cost = np.inf
+    best_boundaries = None
+    best_sorted = None
+    best_bins = None
+
+    for k in range(min_k, max_k + 1):
+        try:
+            _, cost, _, _ = optimal_binning_min_size(x, k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+            if best_k is None or cost < best_cost:
+                best_k = k
+                best_boundaries, _, best_sorted, best_bins = optimal_binning_min_size(x, k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+                best_cost = cost
+        except (ValueError, RuntimeError):
+            pass
+    
+    return best_boundaries, best_cost, best_sorted, best_bins
+
+def plot_bins(df, bin_column, age_column):
+    """
+    Histogram plot showing binning of the age column.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for bin in df[bin_column].unique():
+        if bin is np.nan:
+            continue
+        bin_data = df[df[bin_column] == bin][age_column]
+        ax.hist(bin_data, bins=20, alpha=0.5, label=f"Bin {bin}")
+    ax.set_xlabel("Age in Months")
+    ax.set_ylabel("Count")
+    ax.set_title("Age Distribution by Bin")
+    plt.tight_layout()
+
+    return fig
+
+
+
+def create_age_bins(df, column_name, min_k = 2, max_k = 10, alpha=0, beta=10, gamma=3):
+    """
+    Create binned age column in dataframe using optimal binning.
+    """
+    vals = df[column_name].values
+    vals = vals[~np.isnan(vals)]
+    min_bin_size = len(vals) // (max_k * 2)
+    
+    boundaries, _, _, bins = find_optimal_number_of_bins(vals, min_k, max_k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+    if boundaries is None:
+        raise ValueError("Failed to find optimal bins for age. Please check the age distribution and try adjusting parameters.")
+    df["binned_age"] = pd.cut(df[column_name], bins=[-np.inf] + [b[1] for b in bins] + [np.inf], labels=False)
+    return df
+
 def outlier_detection(
     df: pd.DataFrame,
     age_column: str,
@@ -151,9 +347,21 @@ def outlier_detection(
             f"{', '.join(missing_cols)}. Please check your input data."
         )
         return df, outliers
+    
+    # Attempt to create age bins, but if it fails, proceed with original age column
+    try:
+        df = create_age_bins(df, age_column)
+        bin_column = "binned_age"
+        st.write("Age binning visualization:")
+        fig = plot_bins(df, bin_column, age_column)
+        st.pyplot(fig)
+    except ValueError as e:
+        st.warning(f"Error occurred while creating age bins: {e}")
+        st.write("Proceeding with original age column without binning.")
+        bin_column = age_column  # fallback to original age column if binning fails
 
-    for age in df[age_column].unique():
-        age_df = df[df[age_column] == age]
+    for age in df[bin_column].unique():
+        age_df = df[df[bin_column] == age]
         outliers_grouped = pd.DataFrame()
         if not age_df.empty:
             z_scores = (age_df[volumetric_columns] - age_df[volumetric_columns].mean()) / age_df[volumetric_columns].std()
