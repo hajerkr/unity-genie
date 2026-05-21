@@ -126,7 +126,7 @@ def download_session_data(project, session, project_path, segtool, input_source,
                 if gear == "minimorph":
                     df["analysis_id_mm"]   = analysis.id
                     df["gear_v_minimorph"] = analysis.gear_info.version
-                    df.rename(columns={col: f'mm_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+                    df.rename(columns={col: f'{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
                 elif gear == "supersynth":
                     df["analysis_id_ss"]   = analysis.id
                     df["gear_v_supersynth"] = analysis.gear_info.version
@@ -136,7 +136,7 @@ def download_session_data(project, session, project_path, segtool, input_source,
                     df["analysis_id_ra"]   = analysis.id
                     df["gear_v_recon_all"] = analysis.gear_info.version
                     df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
-                    df.rename(columns={col: f'ra_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+                    df.rename(columns={col: f'RA_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
 
                 # Merge horizontally into session_df
                 #print(session_df, session_df.shape)
@@ -305,7 +305,7 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
         #Concatenate to the st.session_state.df, some columns are in common, some are not, combination should handle this
 
     st.session_state.df = pd.concat(st.session_state.df , axis=0, ignore_index=True)
-    #Reorder columns to have project, subject, session, acquisition at the front, then columns starting with ra, mm, then the rest
+    #Reorder columns to have project, subject, session, acquisition at the front, then columns starting with RA, mm, then the rest
     #Drop age and sex columns if they exist
     st.session_state.df.drop(columns=['age','sex','gear_v'], inplace=True, errors='ignore')
 
@@ -313,12 +313,12 @@ def assemble_csv(derivatives, out_csv="derivatives_summary.csv"):
     front_cols = ['project', 'subject', 'session', 'childTimepointAge_months', 'childBiologicalSex', 'studyTimepoint', 'session_qc', 'acquisition']
     cols = st.session_state.df.columns.tolist()
 
-    ra_cols = [col for col in cols if col.startswith('ra_')]
-    mm_cols = [col for col in cols if col.startswith('mm_')]
-    spoken_for = set(front_cols + ra_cols + mm_cols)
+    RA_cols = [col for col in cols if col.startswith('RA_')]
+    MM_cols = [col for col in cols if col.startswith('MM_')]
+    spoken_for = set(front_cols + RA_cols + MM_cols)
     other_cols = [col for col in cols if col not in spoken_for]
 
-    new_order = front_cols + ra_cols + mm_cols + other_cols
+    new_order = front_cols + RA_cols + MM_cols + other_cols
 
     # Add any missing front_cols as NaN
     for col in front_cols:
