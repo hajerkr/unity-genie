@@ -775,7 +775,7 @@ st.write("Select a gear to batch run to view details:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["QA","MRIQC","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
+gear_names = ["QA","MRIQC","Circumference", "Freesurfer-recon-all", "Infant-freesurfer", "iBEAT", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
@@ -875,6 +875,9 @@ if st.button("Run Batch Job"):
 
     elif selected_gear=="SuperSynth":
         job_list = run_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
+    
+    elif selected_gear=="iBEAT":
+        job_list = run_jobs(fw, fw_project, 'ibeat2', gambas=input_type, analysis_tag='gpu')
 
     elif selected_gear in ["QA","MRIQC"]:
         #Hide input type buttons

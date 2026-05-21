@@ -27,8 +27,8 @@ scikit-image
 
 # Flywheel SDK
 flywheel
-flywheel-sdk
-fw-client
+flywheel-sdk==17.8.0
+fw-client==2.1.1
 
 # Jupyter/IPython
 ipython
