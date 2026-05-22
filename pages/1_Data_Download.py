@@ -38,8 +38,19 @@ def download_session_data(project, session, project_path, segtool, input_source,
 
     analyses = [
         a for a in session.analyses
-        if a.reload().gear_info is not None and a.reload().gear_info.name in segtool and a.reload().job.get('state') == 'complete'
+        if a.reload().gear_info is not None
+        and a.reload().gear_info.name in segtool
+        and a.reload().job.get('state') == 'complete'
     ]
+
+    for acq in session.acquisitions():
+        acq = acq.reload()
+        acq_analyses = [a for a in acq.analyses
+                    if a.reload().gear_info is not None
+                    and a.reload().gear_info.name in segtool
+                    and a.reload().job.get('state') == 'complete'
+                ]
+        analyses.extend(acq_analyses)
 
     mrr_analyses = []
     gambas_analyses = []
@@ -51,6 +62,13 @@ def download_session_data(project, session, project_path, segtool, input_source,
 
     for segmentation_tool in segtool:
         tool_analyses = [a for a in analyses if a.gear_info.name == segmentation_tool]  # scoped
+
+        print(f"\n--- {ses_label} | {segmentation_tool} ---")
+        for a in tool_analyses:
+            a = a.reload()
+            input_names = [inp.name for inp in a.inputs] if a.inputs else []
+            print(f"analysis label: {a.label}")
+            print(f"inputs: {input_names}")
 
         if input_source == "MRR":
             mrr_analyses.append(get_latest(tool_analyses, "mrr"))
@@ -126,7 +144,7 @@ def download_session_data(project, session, project_path, segtool, input_source,
                 if gear == "minimorph":
                     df["analysis_id_mm"]   = analysis.id
                     df["gear_v_minimorph"] = analysis.gear_info.version
-                    df.rename(columns={col: f'{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
+                    df.rename(columns={col: f'MM_{col}' for col in volumetric_cols if col in df.columns}, inplace=True)
                 elif gear == "supersynth":
                     df["analysis_id_ss"]   = analysis.id
                     df["gear_v_supersynth"] = analysis.gear_info.version
@@ -439,12 +457,10 @@ if minimorph:
     keywords.extend(["volumes"])
 if supersynth:
     derivative_type.append("supersynth")
+    keywords.extend(["volumes"])
 if recon_any:
     derivative_type.append("recon-any")
-    
 
-if minimorph or supersynth:
-    keywords.extend(["volumes"])
 
 #Add debugger button to only fetch a handful of sessions for testing
 debug = st.sidebar.checkbox("Debug mode (fetch fewer sessions)", value=False)
