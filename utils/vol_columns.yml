@@ -240,3 +240,18 @@ supersynth: [
       'Right-MammillaryBody',
       'Right-Basal-Forebrain',
       'Right-SeptalNuc']
+
+sc_lomina: [ "sc_csf",
+         "sc_gray_matter",
+         "sc_white_matter",
+         "sc_total_icv",
+         "sc_left_caudate",
+         "sc_right_caudate",
+         "sc_left_lentiform",
+         "sc_right_lentiform",
+         "sc_left_hippocampus",
+         "sc_right_hippocampus",
+         "sc_left_thalamus",
+         "sc_right_thalamus",
+         "sc_corpus_callosum",
+         "sc_gm_wm_ratio"]

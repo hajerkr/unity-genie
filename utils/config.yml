@@ -1,0 +1,6 @@
+duplicate_keys:
+  - CohortName
+  - StudyID
+  - UniqueStudyID
+  - MRI_fieldStrength
+  - studyTimepoint
