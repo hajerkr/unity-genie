@@ -310,7 +310,7 @@ def plot_outlier_trend(outliers_df, keyword):
 
     plt.suptitle(keyword, fontsize=16)
     plt.tight_layout()
-    #return fig
+    return fig
 
 def find_amygdala_columns(columns):
     #Candidates should be any columns that contain 'amygdala'
@@ -530,7 +530,7 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
     os.makedirs(os.path.join(work_dir.parent, "data"), exist_ok=True)
     final_outliers_path = os.path.join(work_dir.parent, "data", f"{group_str}_all_outliers.csv")
     all_outliers_df.to_csv(final_outliers_path, index=False)
-    st.write("Last 10 columns of outliers dataframe:", all_outliers_df.iloc[:, -10:].head())
+    #st.write("Last 10 columns of outliers dataframe:", all_outliers_df.iloc[:, -10:].head())
     return df_out, final_outliers_path, all_outliers_df
 
 
