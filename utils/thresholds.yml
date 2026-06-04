@@ -4,9 +4,22 @@ minimorph:
     inputs: ["MRR"]
     thresholds: 
        { "MM_supratentorial_tissue": 2 ,
+        "MM_supratentorial_csf": 2 ,
+        "MM_cerebellum": 2 ,
+        "MM_cerebellum_csf": 2 ,
+        "MM_right_thalamus": 2 ,
+        "MM_left_thalamus": 2 ,
+        "MM_right_caudate": 2 ,
+        "MM_left_caudate": 2 ,
+        "MM_right_putamen": 2 ,
+        "MM_left_putamen": 2 ,
+        # "ventricles": 2,
+        "MM_brainstem_csf": 2}
+    cov_thresholds: 
+       { "MM_supratentorial_tissue": 2 ,
         "MM_supratentorial_csf": 3 ,
         "MM_cerebellum": 1.3 ,
-        "MM_cerebellum_csf": 1.5 ,
+        "MM_cerebellum_csf": 1.8 ,
         "MM_right_thalamus": 1.5 ,
         "MM_left_thalamus": 1.5 ,
         "MM_right_caudate": 1.5 ,
@@ -14,8 +27,9 @@ minimorph:
         "MM_right_putamen": 1.5 ,
         "MM_left_putamen": 1.5 ,
         # "ventricles": 2,
-        "MM_brainstem_csf": 1.5}
-    
+        "MM_brainstem_csf": 1.8}
+
+
     volumetric_cols: 
         - MM_supratentorial_tissue
         - MM_supratentorial_csf
@@ -46,19 +60,50 @@ recon-all-clinical :
     prefix: RA
     inputs: ["MRR", GAMBAS"]
     thresholds: 
-        {"RA_right_thalamus": 1.5,
-        "RA_left_thalamus": 1.5,
-        "RA_right_caudate": 1.5,
-        "RA_left_caudate": 1.5,
-        "RA_right_putamen": 1.5,
-        "RA_left_putamen": 1.5,
+        {"RA_right_thalamus": 2.5,
+        "RA_left_thalamus": 2.5,
+        "RA_right_caudate": 2.5,
+        "RA_left_caudate": 2.5,
+        "RA_right_putamen": 2.5,
+        "RA_left_putamen": 2.5,
+        "RA_csf": 2.5,
+        "RA_right_cerebral_cortex": 2.5,
+        "RA_left_cerebral_cortex": 2.5,
+        "RA_right_cerebral_white_matter": 2.5,
+        "RA_left_cerebral_white_matter": 2.5,
+        "RA_right_cerebellum_white_matter": 2.5,
+        "RA_left_cerebellum_white_matter": 2.5,
+        "RA_right_cerebellum_cortex": 2.5,
+        "RA_left_cerebellum_cortex": 2.5,
         # "left_lateral_ventricle": 2,
         # "left_inferior_lateral_ventricle": 2,
         # "right_lateral_ventricle": 2,
         # "right_inferior_lateral_ventricle": 2
         # 3rd_ventricle, 4th_ventricle
         }
-    
+
+    cov_thresholds: 
+        {"RA_right_thalamus": 1.7,
+        "RA_left_thalamus": 1.7,
+        "RA_right_caudate": 1.7,
+        "RA_left_caudate": 1.7,
+        "RA_right_putamen": 1.7,
+        "RA_left_putamen": 1.7,
+        "RA_csf": 1.7,
+        "RA_right_cerebral_cortex": 1.7,
+        "RA_left_cerebral_cortex": 1.7,
+        "RA_right_cerebral_white_matter": 1.7,
+        "RA_left_cerebral_white_matter": 1.7,
+        "RA_right_cerebellum_white_matter": 1.7,
+        "RA_left_cerebellum_white_matter": 1.7,
+        "RA_right_cerebellum_cortex": 1.5,
+        "RA_left_cerebellum_cortex": 1.5,
+        # "left_lateral_ventricle": 1,
+        # "left_inferior_lateral_ventricle": 2,
+        # "right_lateral_ventricle": 2,
+        # "right_inferior_lateral_ventricle": 2
+        # 3rd_ventricle, 4th_ventricle
+        }
     volumetric_cols: 
         - RA_left_cerebral_white_matter
         - RA_left_cerebral_cortex
@@ -168,14 +213,41 @@ supersynth:
         prefix: ss
         inputs: ["MRR"]
         thresholds: {
-            "ss_Right-Thalamus": 1.5,
-            "ss_Left-Thalamus": 1.5,
-            "ss_Right-Caudate": 1.5,
-            "ss_Left-Caudate": 1.5,
-            "ss_Right-Putamen": 1.5,
-            "ss_Left-Putamen": 1.5
-        }
+            "ss_Right-Thalamus": 2.5,
+            "ss_Left-Thalamus": 2.5,
+            "ss_Right-Caudate": 2.5,
+            "ss_Left-Caudate": 2.5,
+            "ss_Right-Putamen": 2.5,
+            "ss_Left-Putamen": 2.5,
+            "ss_CSF": 2.5,
+            #"ss_Right-Cerebral-White-Matter": 2.5,
+            #"ss_Left-Cerebral-White-Matter": 2.5,
+            "ss_Right-Cerebral-Cortex": 2.5,
+            "ss_Left-Cerebral-Cortex": 2.5,
+            #"ss_Right-Cerebellum-White-Matter": 2,
+            #"ss_Left-Cerebellum-White-Matter": 2,
+            "ss_Right-Cerebellum-Cortex": 2.5,
+            "ss_Left-Cerebellum-Cortex":2.5,
 
+        }
+        cov_thresholds: {
+            "ss_Right-Thalamus": 1.7,
+            "ss_Left-Thalamus": 1.7,
+            "ss_Right-Caudate": 1.7,
+            "ss_Left-Caudate": 1.7,
+            "ss_Right-Putamen": 1.7,
+            "ss_Left-Putamen": 1.7,
+            "ss_CSF": 1.7,
+            #"ss_Right-Cerebral-White-Matter": 2.5,
+            #"ss_Left-Cerebral-White-Matter": 2.5,
+            "ss_Right-Cerebral-Cortex": 1.7,
+            "ss_Left-Cerebral-Cortex": 1.7,
+            #"ss_Right-Cerebellum-White-Matter": 2,
+            #"ss_Left-Cerebellum-White-Matter": 2,
+            "ss_Right-Cerebellum-Cortex": 1.5,
+            "ss_Left-Cerebellum-Cortex":1.5,
+
+        }
         volumetric_cols:
         
         - ss_3rd-Ventricle
@@ -227,11 +299,28 @@ sc_lomina:
         prefix: sc
         inputs: ["SF"]
         thresholds: {
-                "sc_left_thalamus": 1.5,
-                "sc_right_thalamus": 1.5,
-                "sc_right_caudate": 1.5,
-                "sc_left_caudate": 1.5,
-                "sc_csf": 1.5
+                "sc_left_thalamus": 2.5,
+                "sc_right_thalamus": 2.5,
+                "sc_right_caudate": 2.5,
+                "sc_left_caudate": 2.5,
+                "sc_right_lentiform": 2.5,
+                "sc_left_lentiform": 2.5,
+                "sc_csf": 2.5,
+                "sc_gray_matter": 2.5,
+                "sc_white_matter": 2.5,
+                "sc_corpus_callosum": 2.5,
+        }
+        cov_thresholds: {
+                "sc_left_thalamus": 1.7,
+                "sc_right_thalamus": 1.7,
+                "sc_right_caudate": 1.7,
+                "sc_left_caudate": 1.7,
+                "sc_right_lentiform": 1.7,
+                "sc_left_lentiform": 1.7,
+                "sc_csf": 1.7,
+                "sc_gray_matter": 1.7,
+                "sc_white_matter": 1.7,
+                "sc_corpus_callosum": 1.7,
         }
         volumetric_cols:
             - sc_csf
