@@ -59,7 +59,6 @@ def covariance_difference(data):
         return data.copy()
     
     # Drop columns that are entirely NaN
-    data = data.dropna(axis=1, how="all")
     if data.shape[0] < 2 or data.shape[1] < 2:
         return data.copy()
     
@@ -106,6 +105,7 @@ def threshold_outlier_detection(data, skip_covariance=False, thresholds=None):
     Returns:
     - DataFrame with outlier counts and per-column outlier flags.
     """
+    data = data.copy()
     thresholds = {k: float(v) for k, v in (thresholds or {}).items()} or {}
     
    
@@ -116,10 +116,9 @@ def threshold_outlier_detection(data, skip_covariance=False, thresholds=None):
     else:
         cov_differences = data.copy()
         method = "zscore"
-
-    for key, value in thresholds.items():
-        print(key, type(value))
-        print(cov_differences[key].map(type).value_counts().head())
+    # for key, value in thresholds.items():
+    #     print(key, type(value))
+    #     print(cov_differences[key].map(type).value_counts().head())
 
     outlier_header = "n_roi_outliers_" + method
 
@@ -132,13 +131,11 @@ def threshold_outlier_detection(data, skip_covariance=False, thresholds=None):
             cov_differences[outlier_header] = cov_differences[key].apply(
                 lambda x: 1 if x > value or x < -value else 0
             )
-            #outliers_df = cov_differences.map(lambda x: 1 if x > value or x < -value else 0)
             outliers_df[f"{key}_outlier_{method}"] = cov_differences[key].apply(
                         lambda x: 1 if x > value or x < -value else 0
                     )
         else:
             outliers = cov_differences[key].apply(lambda x: 1 if x > value or x < -value else 0)
-            # outliers_df = cov_differences.map(lambda x: 1 if x > value or x < -value else 0)
             outliers_df[f"{key}_outlier_{method}"] = cov_differences[key].apply(
                     lambda x: 1 if x > value or x < -value else 0
                 )
@@ -154,6 +151,206 @@ def threshold_outlier_detection(data, skip_covariance=False, thresholds=None):
     cov_differences = pd.concat([cov_differences, outliers_df_unique], axis=1)
 
     return cov_differences.reset_index(drop=True)
+
+
+
+def compute_cost_prefix_sums(x):
+    """
+    Precompute prefix sums for efficient cost calculation.
+    
+    Args:
+        x: array of values
+    
+    Returns:
+        prefix_sum: cumulative sum of x
+        prefix_sum_sq: cumulative sum of x squared
+    """
+    x = np.array(x, dtype=float)
+    prefix_sum = np.cumsum(x)
+    prefix_sum_sq = np.cumsum(x**2)
+    return prefix_sum, prefix_sum_sq
+
+def interval_cost(prefix_sum, prefix_sum_sq, i, j, alpha=0.0):
+    """
+    Calculate cost of binning elements x[i:j] together.
+    Cost = variance + penalty for small bins.
+    
+    Args:
+        prefix_sum, prefix_sum_sq: precomputed prefix sums
+        i, j: bin range (i inclusive, j exclusive)
+        alpha: penalty coefficient for small bins
+    
+    Returns:
+        cost: total cost for this bin
+    """
+    n = j - i
+    if n <= 0:
+        return np.inf
+
+    s = prefix_sum[j-1] - (prefix_sum[i-1] if i > 0 else 0)
+    s2 = prefix_sum_sq[j-1] - (prefix_sum_sq[i-1] if i > 0 else 0)
+    mean = s / n
+
+    # Variance-based cost
+    base_cost = s2 - 2 * mean * s + n * mean**2
+    penalty = alpha / n if alpha > 0 else 0.0
+
+    return base_cost + penalty
+
+
+def optimal_binning_min_size(x, k, min_bin_size, alpha=0.0, beta=25, gamma=50):
+    """
+    Find optimal k bins for data x using dynamic programming.
+    
+    Args:
+        x: data to bin
+        k: number of bins
+        min_bin_size: minimum elements per bin
+        alpha: small bin penalty
+        beta: width penalty coefficient
+        gamma: boundary penalty coefficient
+    
+    Returns:
+        boundaries: list of (start_idx, end_idx) tuples
+        cost: total optimization cost
+        sorted_ages: sorted input data
+        bins: list of (min_val, max_val) tuples per bin
+    """
+    x = sorted(x)
+    n = len(x)
+    if n == 0:
+        raise ValueError("Input data is empty.")
+        st.warning("Input data is empty. Returning no bins.")
+    
+    
+
+    if n < k * min_bin_size:
+        raise ValueError(
+            f"Not enough samples ({n}) for {k} bins with min size {min_bin_size}"
+        )
+
+    prefix_sum, prefix_sum_sq = compute_cost_prefix_sums(x)
+    
+    # DP tables: dp[j] = min cost to bin first j elements
+    dp_prev = np.full(n + 1, np.inf)
+    dp_curr = np.full(n + 1, np.inf)
+    backtrack = np.full((k + 1, n + 1), -1, dtype=int)
+    dp_prev[0] = 0.0
+
+    # Fill DP table for each bin count
+    for bins in range(1, k + 1):
+        dp_curr[:] = np.inf
+
+        for j in range(1, n + 1):
+            # Valid range for previous bin endpoint
+            i_min = max(bins - 1, j - (n - (k - bins) * min_bin_size))
+            i_max = j - min_bin_size
+            if i_max < i_min:
+                continue
+
+            for i in range(i_min, i_max + 1):
+                prev_cost = dp_prev[i]
+                if not np.isfinite(prev_cost):
+                    continue
+
+                # Width penalty: penalize narrow bins
+                if i > 0:
+                    bin_width = x[j-1] - x[i]
+                    width_penalty = beta / max(bin_width, 1e-9)
+                else:
+                    width_penalty = 0.0
+
+                cost = (
+                    prev_cost
+                    + interval_cost(prefix_sum, prefix_sum_sq, i, j, alpha)
+                    + width_penalty
+                    + gamma * (i - 1)
+                )
+
+                if cost < dp_curr[j]:
+                    dp_curr[j] = cost
+                    backtrack[bins, j] = i
+
+        dp_prev, dp_curr = dp_curr, dp_prev
+
+    if not np.isfinite(dp_prev[n]):
+        raise RuntimeError("No feasible binning found with given constraints.")
+
+    # Reconstruct bin boundaries via backtracking
+    boundaries = []
+    curr = n
+    for bins in range(k, 0, -1):
+        prev = backtrack[bins, curr]
+        if prev < 0:
+            raise RuntimeError("Backtracking failed; constraints likely inconsistent.")
+        boundaries.append((prev, curr))
+        curr = prev
+
+    boundaries.reverse()
+    bins_list = [(x[i], x[j-1]) for i, j in boundaries]
+    return boundaries, dp_prev[n], x, bins_list
+
+
+def find_optimal_number_of_bins(x, min_k, max_k, min_bin_size, alpha=0.0, beta=25, gamma=50):
+    """
+    Search for optimal number of bins in range [min_k, max_k].
+    
+    Returns:
+        best_boundaries, best_cost, best_sorted, best_bins
+    """
+    best_k = None
+    best_cost = np.inf
+    best_boundaries = None
+    best_sorted = None
+    best_bins = None
+
+    for k in range(min_k, max_k + 1):
+        try:
+            _, cost, _, _ = optimal_binning_min_size(x, k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+            if best_k is None or cost < best_cost:
+                best_k = k
+                best_boundaries, _, best_sorted, best_bins = optimal_binning_min_size(x, k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+                best_cost = cost
+        except (ValueError, RuntimeError):
+            pass
+    
+    return best_boundaries, best_cost, best_sorted, best_bins
+
+def plot_bins(df, bin_column, age_column):
+    """
+    Histogram plot showing binning of the age column.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for bin in df[bin_column].unique():
+        if bin is np.nan:
+            continue
+        bin_data = df[df[bin_column] == bin][age_column]
+        ax.hist(bin_data, bins=20, alpha=0.5, label=f"Bin {bin}")
+    ax.set_xlabel("Age in Months")
+    ax.set_ylabel("Count")
+    ax.set_title("Age Distribution by Bin")
+    plt.tight_layout()
+
+    return fig
+
+
+
+def create_age_bins(df, column_name, min_k = 2, max_k = 10, alpha=0, beta=10, gamma=3):
+    """
+    Create binned age column in dataframe using optimal binning.
+    """
+    vals = df[column_name].values
+    vals = vals[~np.isnan(vals)]
+    min_bin_size = len(vals) // (max_k * 2)
+    
+    boundaries, _, _, bins = find_optimal_number_of_bins(vals, min_k, max_k, min_bin_size, alpha=alpha, beta=beta, gamma=gamma)
+    if boundaries is None:
+        raise ValueError("Failed to find optimal bins for age. Please check the age distribution and try adjusting parameters.")
+    df["binned_age"] = pd.cut(df[column_name], bins=[-np.inf] + [b[1] for b in bins] + [np.inf], labels=False)
+    return df
+
+
+
 
 
 def outlier_detection(
@@ -186,6 +383,8 @@ def outlier_detection(
         ["NA", "N/A", "na", "nan", ""], np.nan
     )
     df[volumetric_columns] = df[volumetric_columns].apply(pd.to_numeric, errors="coerce")
+    df = df.dropna(subset=volumetric_columns, how="all")
+    
 
     cov_thresholds = cov_thresholds or {}
     zscore_thresholds = zscore_thresholds or {}
@@ -201,21 +400,51 @@ def outlier_detection(
         )
         return df, outliers
 
-    for age in df[age_column].unique():
-        age_df = df[df[age_column] == age]
+
+    try:
+        df = create_age_bins(df, age_column)
+        bin_column = "binned_age"
+        st.write("Age binning visualization:")
+        fig = plot_bins(df, bin_column, age_column)
+        st.pyplot(fig)
+    except ValueError as e:
+        st.error(f"Error occurred while creating age bins: {e}")
+        st.write("Proceeding with original age column without binning.")
+        bin_column = age_column  # fallback to original age column if binning fails
+
+    for age in df[bin_column].unique():
+        age_df = df[df[bin_column] == age]
         outliers_grouped = pd.DataFrame()
+        st.write(f"Processing age group: {age} (n={len(age_df)})")
+
+        cov_thresholds_local = cov_thresholds.copy()
+        zscore_thresholds_local = zscore_thresholds.copy()
+        volumetric_columns_local = volumetric_columns.copy()
+        for col in volumetric_columns:
+            if age_df[col].isnull().all():
+                
+                volumetric_columns_local.remove(col)
+                age_df = age_df.drop(columns=[col])
+                if col in cov_thresholds:
+                    del cov_thresholds_local[col]
+                    print(f"covariance keys after deletion: {cov_thresholds_local.keys()}")
+                if col in zscore_thresholds:
+                    del zscore_thresholds_local[col]
+                print(f"Column '{col}' has all NaN values for age group {age}")
+        age_df = age_df.dropna(subset=volumetric_columns_local, axis = 0)
+
         if not age_df.empty:
             if len(age_df) < 3:
                 continue
-            z_scores = (age_df[volumetric_columns] - age_df[volumetric_columns].mean()) / age_df[volumetric_columns].std()
+            z_scores = (age_df[volumetric_columns_local] - age_df[volumetric_columns_local].mean()) / age_df[volumetric_columns_local].std()
 
-            
-            outliers_grouped = threshold_outlier_detection(z_scores, thresholds=cov_thresholds)
-            zscore_outliers = threshold_outlier_detection(z_scores, skip_covariance=True, thresholds=zscore_thresholds)
+            outliers_grouped = threshold_outlier_detection(z_scores, thresholds=cov_thresholds_local)
+            zscore_outliers = threshold_outlier_detection(z_scores, skip_covariance=True, thresholds=zscore_thresholds_local)
 
             zscore_columns = [col for col in zscore_outliers.columns if col.endswith("_zscore")]
             for col in zscore_columns:
                 outliers_grouped[col] = zscore_outliers[col].values
+                outliers_grouped[col.replace("_zscore", "_cov")] = outliers_grouped[col.replace("_zscore", "_cov")].values
 
             for col in misc_columns:
                 if col in age_df.columns:
@@ -225,7 +454,7 @@ def outlier_detection(
 
             #If there are more than 2 outliers in either method, flag the session as an outlier
             outliers_grouped = outliers_grouped[
-                    (outliers_grouped["n_roi_outliers_cov"] >= 2) | (outliers_grouped["n_roi_outliers_zscore"] >= 2)
+                    (outliers_grouped["n_roi_outliers_cov"] >= 2) | (outliers_grouped["n_roi_outliers_zscore"] >= 3)
                 ]
 
         if not outliers.empty:
@@ -236,7 +465,6 @@ def outlier_detection(
             other_cols = [col for col in outliers.columns if col not in first_cols]
             outliers = outliers[first_cols + other_cols]
         else:
-            print("Outliers is empty....", age)
             outliers = outliers_grouped
 
     if outliers.empty:
@@ -381,11 +609,15 @@ def _detect_outliers_for_input(
     df_filt: pd.DataFrame,
     base_volumetric_cols: list,
     outlier_thresholds: dict,
+    covariance_outlier_thresholds: dict,
     columns_to_keep_base: list,
 ):
     available_vols = [c for c in base_volumetric_cols if c in df_filt.columns]
     available_thresholds = {
         k: v for k, v in outlier_thresholds.items() if k in df_filt.columns
+    }
+    available_covariance_thresholds = {
+        k: v for k, v in covariance_outlier_thresholds.items() if k in df_filt.columns
     }
 
     missing = [c for c in base_volumetric_cols if c not in df_filt.columns]
@@ -412,7 +644,7 @@ def _detect_outliers_for_input(
         age_column="age_in_months",
         volumetric_columns=available_vols,
         misc_columns=columns_to_keep,
-        cov_thresholds=available_thresholds,
+        cov_thresholds=available_covariance_thresholds,
         zscore_thresholds=available_thresholds,
     )
 
@@ -473,12 +705,15 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
         st.info(f"Running outlier detection for {segmentation_tool}...")
 
         outlier_thresholds = CFG_DICT[segmentation_tool]["thresholds"]
+        covariance_outlier_thresholds = CFG_DICT[segmentation_tool]["cov_thresholds"]
         base_volumetric_cols = CFG_DICT[segmentation_tool]["volumetric_cols"]
+
 
         outlier_sessions, evaluated_sessions, outliers_df = _detect_outliers_for_input(
             df_merged,
             base_volumetric_cols,
             outlier_thresholds,
+            covariance_outlier_thresholds,
             columns_to_keep_base,
         )
 
