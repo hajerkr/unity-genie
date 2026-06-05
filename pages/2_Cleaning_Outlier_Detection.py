@@ -479,6 +479,21 @@ def outlier_detection(
     df = df.copy().merge(tag_only, how="left", on=["StudyID", "studyTimepoint"])
     
     df["is_outlier"] = df["is_outlier"].fillna(0).astype(bool)
+    
+
+    # add outliers where 2 or more values are missing
+    missing_outliers = df[df.isnull().sum(axis=1) >= 2]
+    st.info(f"Flagging {missing_outliers.shape[0]} additional outliers with 2 or more missing values.")
+    missing_outliers["is_outlier"] = True
+    missing_qc_cols = [col for col in first_cols + other_cols if col not in missing_outliers.columns]
+    for col in missing_qc_cols:
+        missing_outliers[col] = np.nan
+    missing_outliers["n_roi_outliers_cov"] = 0
+    missing_outliers["n_roi_outliers_zscore"] = 0
+    outliers = pd.concat([outliers, missing_outliers[first_cols+other_cols]], ignore_index=True)
+    df.loc[missing_outliers.index, "is_outlier"] = True
+
+
 
     first_cols = ["CohortName", "StudyID", "studyTimepoint", "is_outlier", "n_roi_outliers_zscore", "n_roi_outliers_cov"]
     if "input_gear_v" in df.columns:
