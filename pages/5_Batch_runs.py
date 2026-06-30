@@ -7,31 +7,36 @@ import traceback
 
 def is_complete(asys,gearname,latest_version=False):
     try:
+        #print attributes of asys
+        print(asys)
         asys=asys.reload()
+        
+        if gearname =="gambas" and getattr(asys, 'gear_info', None) is None:
+    
+                print(f"Analysis {asys.id} has no gear_info, checking label for gambas-batch...")
+                #Look at analysis container containing "gambas-batch" in the label
+                print(asys.label)
+                return (
+                    "gambas" in asys.label and ("0.4.17" in asys.label or "0.4.14" in asys.label)
+                    and len(asys.files) > 0
+                )
+        elif getattr(asys, 'gear_info', None) is not None:
+            #If asys has attribute gear_info
+            gear = fw.gears.find_first(f"gear.name={gearname}")
+            #Get gear version
+            gear_version = gear.gear.version if gear else "Unknown"
+            
+            return (
+                asys.gear_info is not None
+                and asys.gear_info.get('name') == gearname
+                and asys.job is not None
+                and asys.job.get('state') == 'complete'
+                #ensure last gear version is ran
+                and (not latest_version or asys.gear_info.get('version') == gear_version)
+            )
     except Exception as e:
         print(f"Error reloading analysis {asys.id}: {e}")
-        
-    if gearname =="gambas" and getattr(asys, 'gear_info', None) is None:
-   
-            print(f"Analysis {asys.id} has no gear_info, checking label for gambas-batch...")
-            #Look at analysis container containing "gambas-batch" in the label
-            print(asys.label)
-            return (
-                "gambas" in asys.label and ("0.4.17" in asys.label or "0.4.14" in asys.label)
-                and len(asys.files) > 0
-            )
-    else:
-        gear = fw.gears.find_first(f"gear.name={gearname}")
-        #Get gear version
-        gear_version = gear.gear.version if gear else "Unknown"
-        return (
-            asys.gear_info is not None
-            and asys.gear_info.get('name') == gearname
-            and asys.job is not None
-            and asys.job.get('state') == 'complete'
-            #ensure last gear version is ran
-            and (not latest_version or asys.gear_info.get('version') == gear_version)
-        )
+        return False
     
     # asys=asys.reload()
     # return (
@@ -42,26 +47,35 @@ def is_complete(asys,gearname,latest_version=False):
     # )
 
 def is_failed(asys,gearname, latest_version=False):
-    asys=asys.reload()
-    gear = fw.gears.find_first(f"gear.name={gearname}")
-    #Get gear version
-    gear_version = gear.gear.version if gear else "Unknown"
-    return (
-        asys.gear_info is not None
-        and gearname in asys.gear_info.get('name')
-        and asys.job is not None
-        and asys.job.get('state') == 'failed'
-        and (not latest_version or asys.gear_info.get('version') == gear_version)
-    )
+
+    try:
+        asys=asys.reload()
+        gear = fw.gears.find_first(f"gear.name={gearname}")
+        #Get gear version
+        gear_version = gear.gear.version if gear else "Unknown"
+        return (
+            asys.gear_info is not None
+            and gearname in asys.gear_info.get('name')
+            and asys.job is not None
+            and asys.job.get('state') == 'failed'
+            and (not latest_version or asys.gear_info.get('version') == gear_version)
+        )
+    except Exception as e:
+        print(f"Error checking failed status for analysis {asys.id}: {e}")
+        return False
 
 def is_pending(asys,gearname):
-    asys=asys.reload()
-    return (
-        asys.gear_info is not None
-        and gearname in asys.gear_info.get('name')
-        and asys.job is not None
-        and asys.job.get('state') in ['pending', 'running']
+    try:
+        asys=asys.reload()
+        return (
+            asys.gear_info is not None
+            and gearname in asys.gear_info.get('name')
+            and asys.job is not None
+            and asys.job.get('state') in ['pending', 'running']
     )
+    except Exception as e:
+        print(f"Error checking pending status for analysis {asys.id}: {e}")
+        return False
 def run_gambas_jobs(fw, project):
     job_list = []
     processed_sessions = 0
@@ -280,7 +294,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS mrr",
                             "return_type":"analysis"}
                         )
-
+                        
                         mrr_matches = [r.analysis.reload() for r in mrr_results if is_complete(r.analysis,"mrr")]
                         
                        
@@ -307,7 +321,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             if re.search(r'mrr.*\.nii.gz', file.name):
                                 inputfile = file
 
-                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
+                        #job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         job_list.append(job_id)
                         processed_sessions += 1
                         status.text(f"🚀 Submitted {gearname} job")
@@ -397,35 +411,35 @@ def has_pending_asys(session, gearname, gambas=False):
     Check if session already has a pending segmentation analysis of the target version.
     """
 
-    query = ""
-    if gambas:
-        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND analysis.label CONTAINS gambas)"
-    else:
-        query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND NOT(analysis.label CONTAINS gambas))"
+    # query = ""
+    # if gambas:
+    #     query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND analysis.label CONTAINS gambas)"
+    # else:
+    #     query = f"session._id = {session.id} AND (analysis.label CONTAINS {gearname} AND NOT(analysis.label CONTAINS gambas))"
 
 
-    gear_results = fw.search(
-        {"structured_query": query,
-        "return_type":"analysis"}
-    )
-    gear_matches = [r.analysis.reload() for r in gear_results if is_pending(r.analysis,gearname)]
+    # gear_results = fw.search(
+    #     {"structured_query": query,
+    #     "return_type":"analysis"}
+    # )
+    # gear_matches = [r.analysis.reload() for r in gear_results if is_pending(r.analysis,gearname)]
 
-    if gear_matches:
-        return True
+    # if gear_matches:
+    #     return True
     
-    # for analysis in session.analyses:
-    #     if not analysis.gear_info:
-    #         continue
+    for analysis in session.analyses:
+        if not analysis.gear_info:
+            continue
             
-    #     gear_name = analysis.gear_info.get('name', '').lower()
-    #     #gear_version = analysis.gear_info.get('version', '')
+        gear_name = analysis.gear_info.get('name', '').lower()
+        #gear_version = analysis.gear_info.get('version', '')
         
-    #     if gear.gear.name in gear_name : #and gear_version == target_version:
-    #         job_state = analysis.job.get('state') if analysis.job else None
-    #         if gambas and 'gambas' in analysis.label.lower() and job_state in ['pending', 'running']:
-    #             return True
-    #         elif not gambas and 'gambas' not in analysis.label.lower() and job_state in ['pending', 'running']:
-    #             return True
+        if gearname in gear_name : #and gear_version == target_version:
+            job_state = analysis.job.get('state') if analysis.job else None
+            if gambas and 'gambas' in analysis.label.lower() and job_state in ['pending', 'running']:
+                return True
+            elif not gambas and 'gambas' not in analysis.label.lower() and job_state in ['pending', 'running']:
+                return True
     return False
 
 def has_failed_asys(session, gearname, gambas=False):
@@ -472,6 +486,7 @@ def find_latest_gambas_file(session):
     print(f"   Checking analyses in session")
     
     gambas_analyses = []
+    #Get the acquisition analyses in this session
     gambas_results = fw.search(
         {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS gambas",
         "return_type":"analysis"}
