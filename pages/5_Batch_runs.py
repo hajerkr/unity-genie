@@ -5,6 +5,16 @@ import re
 from datetime import datetime
 import traceback
 
+def find_mrr(session):
+    
+    mrr_results = fw.search(
+        {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS mrr",
+        "return_type":"analysis"}
+    )
+    
+    mrr_matches = [r.analysis.reload() for r in mrr_results if is_complete(r.analysis,"mrr")]
+
+    return mrr_matches
 def is_complete(asys,gearname,latest_version=False):
     try:
         #print attributes of asys
@@ -321,7 +331,7 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
                             if re.search(r'mrr.*\.nii.gz', file.name):
                                 inputfile = file
 
-                        #job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
+                        job_id = submit_seg_job(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         job_list.append(job_id)
                         processed_sessions += 1
                         status.text(f"🚀 Submitted {gearname} job")
@@ -638,7 +648,7 @@ def check_job_status(fw, job_ids):
 
 
    
-def run_circumference_gear(fw, project, session=None):
+def run_circumference_gear(fw, project, gambas, ession=None):
 
     job_list = []
     processed_sessions = 0
@@ -651,113 +661,126 @@ def run_circumference_gear(fw, project, session=None):
     job_list = list()
     analysis_tag = 'circumference'
     #Print a note that this gear will use GAMBAS as input
-    st.info("⚠️ Note: The Circumference gear requires GAMBAS outputs as input. Ensure that GAMBAS has been run on the sessions.")
+    #st.info("⚠️ Note: The Circumference gear requires GAMBAS outputs as input. Ensure that GAMBAS has been run on the sessions.")
 
     for session in project.sessions():
         session = session.reload()
-        if session is not None:
+        if session is not None and not session.info.get('childTimepointHC_MRI_cm', False):
             inputfile = None
             status.text(f"Parsing...  {session.label}")
-
             inputs = {}
+            if not gambas:
+                mrr_matches = find_mrr(session)
+                if mrr_matches:
+                    #Find the file
+                    for file in mrr_matches[0].files:  
+                        if re.search('mrr.nii.gz', file.name):
+                            inputfile = file
+                            print(inputfile.name)
+                            analysis_tag = 'circumference-mrr-axireg'
 
-            analyses = session.analyses
-
-            # If there are no analyses containers, we know that this gear was not run
-            if len(analyses) == 0:
-                run = 'False'
-                status = 'NA'
-                print('No analysis containers')
             else:
-                try:
+                inputfile = find_latest_gambas_file(session)
+                analysis_tag = 'circumference-gambas'
 
-                    gambas_results = fw.search(
-                        {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS gambas",
-                        "return_type":"analysis"}
-                    )
 
-                    gambas_matches = [r.analysis.reload() for r in gambas_results if is_complete(r.analysis,"gambas")]
-                    # gambas_matches =  [asys for asys in analyses if "gambas" in asys.label]
+            # analyses = session.analyses
 
-                    for matches in [gambas_matches]:
-                        print(f'Found {len(matches)}')
-                        # If there are no matches, the gear didn't run
-                        if len(matches) == 0:
-                            run = 'False'
-                            status = 'NA'
-                        # If there is one match, that's our target
-                        elif len(matches) == 1:
-                            run = 'True'
-                            #status = matches[0].job.get('state')
-                            print(status)
+            # # If there are no analyses containers, we know that this gear was not run
+            # if len(analyses) == 0:
+            #     run = 'False'
+            #     status = 'NA'
+            #     print('No analysis containers')
+            # else:
+            #     try:
 
-                            for file in matches[0].files:  
-                                if re.search('mrr.nii.gz', file.name):
-                                    inputfile = file
-                                    print(inputfile.name)
-                                    analysis_tag = 'circumference-mrr-axireg'
-                                elif re.search('ResCNN.nii.gz', file.name):
-                                    inputfile = file
-                                    print(inputfile.name)
-                                    analysis_tag = 'circumference-gambas'
-                                elif re.search('T2w_gambas.nii.gz', file.name):
-                                    inputfile = file
-                                    print(inputfile.name)
-                                    analysis_tag = 'circumference-gambas'
+            #         gambas_results = fw.search(
+            #             {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS gambas",
+            #             "return_type":"analysis"}
+            #         )
+
+            #         gambas_matches = [r.analysis.reload() for r in gambas_results if is_complete(r.analysis,"gambas")]
+            #         # gambas_matches =  [asys for asys in analyses if "gambas" in asys.label]
+
+            #         for matches in [gambas_matches]:
+            #             print(f'Found {len(matches)}')
+            #             # If there are no matches, the gear didn't run
+            #             if len(matches) == 0:
+            #                 run = 'False'
+            #                 status = 'NA'
+            #             # If there is one match, that's our target
+            #             elif len(matches) == 1:
+            #                 run = 'True'
+            #                 #status = matches[0].job.get('state')
+            #                 print(status)
+
+            #                 for file in matches[0].files:  
+            #                     if re.search('mrr.nii.gz', file.name):
+            #                         inputfile = file
+            #                         print(inputfile.name)
+            #                         analysis_tag = 'circumference-mrr-axireg'
+            #                     elif re.search('ResCNN.nii.gz', file.name):
+            #                         inputfile = file
+            #                         print(inputfile.name)
+            #                         analysis_tag = 'circumference-gambas'
+            #                     elif re.search('T2w_gambas.nii.gz', file.name):
+            #                         inputfile = file
+            #                         print(inputfile.name)
+            #                         analysis_tag = 'circumference-gambas'
                                     
-                        else:
-                                #consider gambas as well as recon-all
-                                last_run_date = max([asys.created for asys in matches])
-                                last_run_analysis = [asys for asys in matches if asys.created == last_run_date]
+            #             else:
+            #                     #consider gambas as well as recon-all
+            #                     last_run_date = max([asys.created for asys in matches])
+            #                     last_run_analysis = [asys for asys in matches if asys.created == last_run_date]
 
-                                # There should only be one exact match
-                                last_run_analysis = last_run_analysis[0]
+            #                     # There should only be one exact match
+            #                     last_run_analysis = last_run_analysis[0]
 
-                                run = 'True'
-                                #status = last_run_analysis.job.get('state')
-                                for file in matches[0].files:  
-                                    if re.search('mrr.nii.gz', file.name):
-                                        inputfile = file
-                                        print(inputfile.name)
-                                        analysis_tag = 'circumference-mrr-axireg'
-                                    elif re.search('ResCNN.nii.gz', file.name):
-                                        inputfile = file
-                                        print(inputfile.name)
-                                        analysis_tag = 'circumference-gambas'
+            #                     run = 'True'
+            #                     #status = last_run_analysis.job.get('state')
+            #                     for file in matches[0].files:  
+            #                         if re.search('mrr.nii.gz', file.name):
+            #                             inputfile = file
+            #                             print(inputfile.name)
+            #                             analysis_tag = 'circumference-mrr-axireg'
+            #                         elif re.search('ResCNN.nii.gz', file.name):
+            #                             inputfile = file
+            #                             print(inputfile.name)
+            #                             analysis_tag = 'circumference-gambas'
 
-                                    elif re.search('T2w_gambas.nii.gz', file.name):
-                                        inputfile = file
-                                        print(inputfile.name)
-                                        analysis_tag = 'circumference-gambas'
-                    if inputfile:
-                        inputs["input"]= inputfile
-                        print("Input file" , inputfile.name)
+            #                         elif re.search('T2w_gambas.nii.gz', file.name):
+            #                             inputfile = file
+            #                             print(inputfile.name)
+            #                             analysis_tag = 'circumference-gambas'
+            if inputfile:
+                inputs["input"]= inputfile
+                print("Input file" , inputfile.name)
 
-                        try:
-                            # The destination for this analysis will be on the session
-                            target_template = 'None'
-                            dest = session
-                            time_fmt = '%d-%m-%Y_%H-%M-%S'
+                try:
+                    # The destination for this analysis will be on the session
+                    dest = session
+                    time_fmt = '%d-%m-%Y_%H-%M-%S'
 
-                            analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
-                            job_id = gear.run(
-                                analysis_label=analysis_label,
-                                inputs=inputs,
-                                destination=dest,
-                                tags=['batch','analysis','circumference'],
-                                config={
-                                    # "target_template": target_template,
-                                    "prefix": analysis_tag
-                                }
-                            )
-                            job_list.append(job_id)
-                            print("Submitting Job: Check Jobs Log", dest.label)
-                            processed_sessions += 1
-                        except Exception as e:
-                            print(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
-
+                    analysis_label = f'{analysis_tag}_{datetime.now().strftime(time_fmt)}'
+                    job_id = gear.run(
+                        analysis_label=analysis_label,
+                        inputs=inputs,
+                        destination=dest,
+                        tags=['batch','analysis','circumference'],
+                        config={
+                            "prefix": analysis_tag
+                        }
+                    )
+                    job_list.append(job_id)
+                    print("Submitting Job: Check Jobs Log", dest.label)
+                    processed_sessions += 1
                 except Exception as e:
-                        print(f"Exception caught for {session.label}: ", e)
+                    print(f"WARNING: Job cannot be sent for {dest.label}. Error: {e}")
+        else:
+            status.text(f"⚠️ Session {session.label} has childTimepointHC_MRI_cm, skipping.")
+            skipped_sessions += 1
+            continue
+       
      # Summary
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
 
@@ -842,7 +865,7 @@ if st.button("Run Batch Job"):
         input_type = 0
 
     if selected_gear == "Circumference":
-        run_circumference_gear(fw, fw_project)
+        run_circumference_gear(fw, fw_project,gambas=input_type)
 
     elif selected_gear == "Recon-all-clinical":
         
