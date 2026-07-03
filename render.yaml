@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter
     region: oregon
-    branch: main
+    branch: render
     buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
     startCommand: "streamlit run Home.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false"
     healthCheckPath: /_stcore/health
