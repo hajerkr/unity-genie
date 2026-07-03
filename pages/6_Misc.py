@@ -3,8 +3,9 @@ from fw_client import FWClient
 import pandas as pd
 import streamlit as st
 import os
-from pathlib import Path
 import pathvalidate as pv
+
+from utils.utils import get_session_data_dir
 
 def load_flywheel_data(project_label):
     # fwclient = FWClient(
@@ -89,7 +90,7 @@ else:
     st.session_state.api_key = API_KEY
 
 #fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
-data_dir = Path(__file__).parent/'../data/'
+data_dir = get_session_data_dir()
 
 #Add dropdown to select project
 @st.cache_data(ttl=600)
@@ -107,9 +108,6 @@ if st.button("Fetch Data"):
         st.success("Data loaded successfully!")
         #Download button for the data as CSV
 
-        if not data_dir.exists():
-            data_dir.mkdir(parents = True)
-
         project_path = pv.sanitize_filepath(data_dir/project_label, platform='auto')
         if not project_path.exists():
             project_path.mkdir(parents = True)
@@ -118,7 +116,7 @@ if st.button("Fetch Data"):
         project_data.to_csv(outdir, index=False)
         if os.path.exists(outdir):
             with open(outdir, "rb") as f:
-                st.download_button("Download CSV", f, file_name=outdir)
+                st.download_button("Download CSV", f, file_name=os.path.basename(outdir))
 
     st.subheader(f"Project: {project_label}")
     st.write(project_data)

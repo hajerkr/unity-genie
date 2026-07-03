@@ -45,6 +45,7 @@ from PIL import Image
 # from utils.giftomp4 import *
 import moviepy.editor as mp
 from utils.authentication import login_screen
+from utils.utils import get_session_data_dir
 
 def convert_gif_to_mp4(gif_path):
 
@@ -358,8 +359,7 @@ def check_previous_reviews(project, username):
                 # Download CSV file
                 #Make directory if it does not exist
                 
-                os.makedirs(os.path.join(Path(__file__).parent,"..","data"), exist_ok=True)
-                download_dir = os.path.join(Path(__file__).parent,"..","data")
+                download_dir = get_session_data_dir()
                 old_ratings_file_path = os.path.join(download_dir, csv_file.name)
                 try:
                     filtered_analyses.download_file(csv_file.name,old_ratings_file_path)
@@ -401,7 +401,7 @@ def download_qc_file(out_dir):
 
     if os.path.exists(out_dir):
         with open(out_dir, "rb") as f:
-            st.download_button("Download CSV", f, file_name=out_dir)
+            st.download_button("Download CSV", f, file_name=os.path.basename(out_dir))
             
      
 
@@ -416,7 +416,7 @@ def qc_subject(row, segmentation_tool, metrics):
     project = fw.projects.find_first(f'label={project_label}')
     project = project.reload()
     
-    download_dir = os.path.join(Path(__file__).parent,"..","data")
+    download_dir = get_session_data_dir()
     st.write(f"### Subject: {sub_label} Session: {ses_label}")
 
     st.session_state.responses = [st.session_state.username, timestamp, project_label, sub_label, ses_label] 
@@ -605,7 +605,7 @@ if segmentation_tool and uploaded_outliers is not None and st.session_state.user
                 project = fw.projects.find_first(f'label={project_label}')
                 project = project.reload()
                 
-                download_dir = os.path.join(Path(__file__).parent,"..","data")
+                download_dir = get_session_data_dir()
                 with st.spinner(f"Downloading data for subject {sub_label} - {ses_label}..."):
                     get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir, project, st.session_state.api_key)
 

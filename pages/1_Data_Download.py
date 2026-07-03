@@ -11,6 +11,8 @@ import streamlit as st
 import yaml
 from packaging import version
 
+from utils.utils import get_session_data_dir
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -300,7 +302,7 @@ def assemble_csv(derivative_paths, label=""):
     time_str = datetime.now().strftime("%Y%m%d-%H%M%S")
     label_str = f"_{label}" if label else ""
 
-    out_csv = f"derivatives_summary_{project_str}{label_str}_{time_str}.csv"
+    out_csv = data_dir / f"derivatives_summary_{project_str}{label_str}_{time_str}.csv"
     combined.to_csv(out_csv, index=False)
     return combined, out_csv
 
@@ -327,8 +329,7 @@ if (API_KEY is None or API_KEY == "") and st.session_state.authenticated is Fals
 fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated else API_KEY)
 
 # Paths
-data_dir = Path(__file__).resolve().parent / "../data/"
-data_dir.mkdir(parents=True, exist_ok=True)
+data_dir = get_session_data_dir()
 
 # vol_columns.yml pathing (portable)
 yml_path = (Path(__file__).resolve().parent / "../utils/vol_columns.yml").resolve()
@@ -457,7 +458,7 @@ if st.sidebar.button("Fetch derivatives"):
             if mrr_df is not None:
                 st.dataframe(mrr_df)
                 with open(mrr_out, "rb") as f:
-                    st.download_button("Download MRR CSV", f, file_name=mrr_out, key="download_mrr")
+                    st.download_button("Download MRR CSV", f, file_name=os.path.basename(mrr_out), key="download_mrr")
         else:
             st.info("No MRR results found.")
 
@@ -467,7 +468,7 @@ if st.sidebar.button("Fetch derivatives"):
             if gambas_df is not None:
                 st.dataframe(gambas_df)
                 with open(gambas_out, "rb") as f:
-                    st.download_button("Download Gambas CSV", f, file_name=gambas_out, key="download_gambas")
+                    st.download_button("Download Gambas CSV", f, file_name=os.path.basename(gambas_out), key="download_gambas")
         else:
             st.info("No Gambas results found.")
 
@@ -484,4 +485,4 @@ if st.sidebar.button("Fetch derivatives"):
         st.dataframe(final_df)
 
         with open(out_csv, "rb") as f:
-            st.download_button("Download CSV", f, file_name=out_csv)
+            st.download_button("Download CSV", f, file_name=os.path.basename(out_csv))
