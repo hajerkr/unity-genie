@@ -237,144 +237,145 @@ def run_jobs(fw, project, gearname, gambas=False, include_pattern=None,analysis_
     for session in sessions:
         if not (session.subject.label.startswith("137-")): #Ensure this does not run on the phantom - waste of resource and nonsense results
             # for session in subject.sessions():
+            try:
                 session = session.reload()
                 session_id = f"{project.label}/{session.subject.label}/{session.label}"
                 status.text(f"\n🔍 Checking session: {session_id} for subject {session.subject.label}")
                 print(f"\n🔍 Checking session: {session_id} for subject {session.subject.label}")
-                try:
-                    # Check if gear already completed specifically for this input, or has a submitted job already
-                    if has_completed_asys(session, gearname, gambas=gambas):
-                        status.text(f"✅ {gearname} with this input already complete, skipping {session_id}")
-                        print(f"✅ {gearname} with this input already complete for session {session_id}, skipping.")
-                        skipped_sessions += 1
-                        
-                        continue
-                    elif has_pending_asys(session, gearname, gambas=gambas):
-                        status.text(f"⏳ {gearname} with this input already pending/running, skipping {session_id}")
-                        print(f"⏳ {gearname} with this input already pending/running for session {session_id}, skipping.")
-                        skipped_sessions += 1
-                        
-                        continue
-                    elif has_failed_asys(session, gearname, gambas=gambas):
-                        status.text(f"❌ {gearname} with this input has previously failed, skipping {session_id}")
-                        print(f"❌ {gearname} with this input has previously failed for session {session_id}, skipping.")
-                        skipped_sessions += 1
-                        
-                        continue
+                
+                # Check if gear already completed specifically for this input, or has a submitted job already
+                if has_completed_asys(session, gearname, gambas=gambas):
+                    status.text(f"✅ {gearname} with this input already complete, skipping {session_id}")
+                    print(f"✅ {gearname} with this input already complete for session {session_id}, skipping.")
+                    skipped_sessions += 1
+                    
+                    continue
+                elif has_pending_asys(session, gearname, gambas=gambas):
+                    status.text(f"⏳ {gearname} with this input already pending/running, skipping {session_id}")
+                    print(f"⏳ {gearname} with this input already pending/running for session {session_id}, skipping.")
+                    skipped_sessions += 1
+                    
+                    continue
+                elif has_failed_asys(session, gearname, gambas=gambas):
+                    status.text(f"❌ {gearname} with this input has previously failed, skipping {session_id}")
+                    print(f"❌ {gearname} with this input has previously failed for session {session_id}, skipping.")
+                    skipped_sessions += 1
+                    
+                    continue
 
-                    #################
+                #################
 
-                    if gearname in ["mriqc","mrr"]:
-                        job_id =  submit_job(fw, session, gearname)
-                        job_list.extend(job_id)
+                if gearname in ["mriqc","mrr"]:
+                    job_id =  submit_job(fw, session, gearname)
+                    job_list.extend(job_id)
+                    processed_sessions += 1
+                    status.text(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
+                    print(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
+                    
+                ### GAMBAS CHECKS ####
+                elif gambas:
+                    # Find the most recent gambas analysis
+                    gambas_file = find_latest_gambas_file(session)
+                    if not gambas_file:
+                        status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job for session {session_id}...")
+                        #Add a function to run gambas if nothing has been found
+
+                        
+                        job_id = submit_job(fw, session,"gambas")
+                        try:
+                            if job_id:
+                                job_list.append(job_id)
+                                status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
+                            else:
+                                skipped_sessions += 1
+                        except Exception as e:
+                                status.text(f"WARNING: Job cannot be sent. Error: {e}")
+                        
                         processed_sessions += 1
-                        status.text(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
-                        print(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
                         
-                    ### GAMBAS CHECKS ####
-                    elif gambas:
-                        # Find the most recent gambas analysis
-                        gambas_file = find_latest_gambas_file(session)
-                        if not gambas_file:
-                            status.text(f"⚠️ No suitable gambas file found. Submitting a gambas job for session {session_id}...")
-                            #Add a function to run gambas if nothing has been found
-
-                            
-                            job_id = submit_job(fw, session,"gambas")
-                            try:
-                                if job_id:
-                                    job_list.append(job_id)
-                                    status.text(f"🚀 Submitting GAMBAS Job : Check Jobs Log")
-                                else:
-                                    skipped_sessions += 1
-                            except Exception as e:
-                                    status.text(f"WARNING: Job cannot be sent. Error: {e}")
-                            
-                            processed_sessions += 1
-                            
-                            continue
-        
-                        elif gambas_file:
-                            print(f"✅ Found gambas file: {gambas_file.name}")
-                            # Submit seg job
-                            job_id = submit_job_input(gear, session, gambas=True, input_file=gambas_file, analysis_tag=analysis_tag)
-                            job_list.append(job_id)
-                            processed_sessions += 1
-
-                            print(f"🚀 Submitted {gearname} job (ID: {job_id})")
-                            
-                            
-                    ### MRR CHECKS ####
-                    elif not gambas and gearname != 'freesurfer-recon-all':
-                        # Submit seg job without MRR input
-                        
-                        inputfile = None
-                        mrr_results = fw.search(
-                            {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS mrr",
-                            "return_type":"analysis"}
-                        )
-                        
-                        mrr_matches = find_mrr(session)
-                    
-                        
-                       
-                        # if not mrr_matches:
-                        #     for acq in session.acquisitions():
-                        #         acq = acq.reload()
-                        #         mrr_matches = [asys for asys in acq.analyses if is_complete(asys,"mrr")]
-                        #         if mrr_matches:
-                        #             break
-
-                        if not mrr_matches:
-                            status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
-                            print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
-                            skipped_sessions += 1
-                            continue
-                    
-                        last_run_date = max([asys.created for asys in mrr_matches])                        
-                        last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
-                        last_run_analysis = last_run_analysis[0]
-                        # print(last_run_analysis.label)
-                        # print(len(last_run_analysis.files))
-                        for file in last_run_analysis.files:  
-                            # print(file.name)
-                            if re.search(r'mrr.*\.nii.gz', file.name):
-                                inputfile = file
-
-                        job_id = submit_job_input(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
+                        continue
+    
+                    elif gambas_file:
+                        print(f"✅ Found gambas file: {gambas_file.name}")
+                        # Submit seg job
+                        job_id = submit_job_input(gear, session, gambas=True, input_file=gambas_file, analysis_tag=analysis_tag)
                         job_list.append(job_id)
                         processed_sessions += 1
-                        status.text(f"🚀 Submitted {gearname} job")
-                        print(f"🚀 Submitted {gearname} job (ID: {job_id})")
 
-                    elif gearname == 'freesurfer-recon-all':                     
+                        print(f"🚀 Submitted {gearname} job (ID: {job_id})")
                         
-                        # Find T1w acquisition based on label string
-                        inputfile = None
-                        for acquisition in session.acquisitions():
-                            acquisition = acquisition.reload()
-                            if t1w_label_string in acquisition.label:
-                                for file in acquisition.files:
-                                    if file.type == 'nifti':
-                                        inputfile = file
-                                        print(f"✅ Found T1w file: {inputfile.name} in acquisition {acquisition.label}")
-                                        break
-                            if inputfile:
-                                break
-                        if not inputfile:
-                            status.text(f"⚠️ No suitable T1w acquisition found with label containing '{t1w_label_string}'. Skipping session.")
-                            skipped_sessions += 1
-                            #Need to log this
-                            skipped_sessions_list.append(session.label)
-                            continue
-                        # Submit seg job with T1w input
-                        job_id = submit_job_input(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
                         
-                except Exception as e:
-                    print(f"Exception caught for session {session_id}: ", traceback.format_exc())
-                    status.text(f"❌ Error processing session {session_id}: {str(e)}")
-                    failed_sessions += 1
-                    continue
+                ### MRR CHECKS ####
+                elif not gambas and gearname != 'freesurfer-recon-all':
+                    # Submit seg job without MRR input
+                    
+                    inputfile = None
+                    mrr_results = fw.search(
+                        {"structured_query": f"session._id = {session.id} AND analysis.label CONTAINS mrr",
+                        "return_type":"analysis"}
+                    )
+                    
+                    mrr_matches = find_mrr(session)
+                
+                    
+                    
+                    # if not mrr_matches:
+                    #     for acq in session.acquisitions():
+                    #         acq = acq.reload()
+                    #         mrr_matches = [asys for asys in acq.analyses if is_complete(asys,"mrr")]
+                    #         if mrr_matches:
+                    #             break
+
+                    if not mrr_matches:
+                        status.text(f"⚠️ No suitable MRR analysis found. Skipping session {session_id}.")
+                        print(f"⚠️ No suitable MRR analysis found for session {session_id}. Skipping.")
+                        skipped_sessions += 1
+                        continue
+                
+                    last_run_date = max([asys.created for asys in mrr_matches])                        
+                    last_run_analysis = [asys for asys in mrr_matches if asys.created == last_run_date]
+                    last_run_analysis = last_run_analysis[0]
+                    # print(last_run_analysis.label)
+                    # print(len(last_run_analysis.files))
+                    for file in last_run_analysis.files:  
+                        # print(file.name)
+                        if re.search(r'mrr.*\.nii.gz', file.name):
+                            inputfile = file
+
+                    job_id = submit_job_input(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
+                    job_list.append(job_id)
+                    processed_sessions += 1
+                    status.text(f"🚀 Submitted {gearname} job")
+                    print(f"🚀 Submitted {gearname} job (ID: {job_id})")
+
+                elif gearname == 'freesurfer-recon-all':                     
+                    
+                    # Find T1w acquisition based on label string
+                    inputfile = None
+                    for acquisition in session.acquisitions():
+                        acquisition = acquisition.reload()
+                        if t1w_label_string in acquisition.label:
+                            for file in acquisition.files:
+                                if file.type == 'nifti':
+                                    inputfile = file
+                                    print(f"✅ Found T1w file: {inputfile.name} in acquisition {acquisition.label}")
+                                    break
+                        if inputfile:
+                            break
+                    if not inputfile:
+                        status.text(f"⚠️ No suitable T1w acquisition found with label containing '{t1w_label_string}'. Skipping session.")
+                        skipped_sessions += 1
+                        #Need to log this
+                        skipped_sessions_list.append(session.label)
+                        continue
+                    # Submit seg job with T1w input
+                    job_id = submit_job_input(gear, session, gambas=False, input_file=inputfile,analysis_tag=analysis_tag)
+                        
+            except Exception as e:
+                print(f"Exception caught for session {session_id}: ", traceback.format_exc())
+                status.text(f"❌ Error processing session {session_id}: {str(e)}")
+                failed_sessions += 1
+                continue
         
     # Summary
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
