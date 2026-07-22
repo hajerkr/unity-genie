@@ -7,6 +7,10 @@ from fw_client import FWClient
 def login_screen():
     st.title(" Welcome to the UNITY App")
     st.write("🔐 Please enter your Flywheel API key to continue.")
+    #Add link to instructions on how to get an API key
+    st.markdown(
+        "Don't have an API key? [Click here for instructions on how to get one](https://docs.flywheel.io/admin/users_and_access/howto_create_api_keys/#generate-an-api-key-enhanced)."
+    )
 
     api_key = st.text_input("Flywheel API Key", type="password")
 
