@@ -147,6 +147,7 @@ def submit_job(fw, session,gearname):
     INPUT_DICT = {"gambas": "input", "qa": "input", "mriqc": "nifti", "mrr": "axi"}
     status = st.empty()
     job_ids = []
+    tags = ["mriqc":"qc","gambas":"gpu"]
     # Look at every acquisition in the session
     for acquisition in session.acquisitions.find(f'label=~{INCLUDE_PATTERN}'):
         inputs = {}
@@ -176,7 +177,7 @@ def submit_job(fw, session,gearname):
     
                         inputs=inputs,
                         destination=dest,
-                        tags=['batch','qc'],
+                        tags=['batch',tags[gearname]],
                         config={
                                 "measurement": "auto-detect",
                                 "save_derivatives": True,
@@ -191,7 +192,7 @@ def submit_job(fw, session,gearname):
                         analysis_label=analysis_label,
                         inputs=inputs,
                         destination=dest,
-                        tags=['batch'],
+                        tags=['batch',tags.get(gearname, 'analysis')],
                         config={
                         
                             # "prefix": analysis_tag,
@@ -850,7 +851,7 @@ if st.button("Run Batch Job"):
             job_list = run_jobs(fw, fw_project, 'freesurfer-recon-all', gambas=False)
 
     elif selected_gear == "GAMBAS":
-        job_list = run_gambas_jobs(fw, fw_project, analysis_tag='gpu')
+        job_list = run_gambas_jobs(fw, fw_project )
 
     elif selected_gear=="SuperSynth":
         job_list = run_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
