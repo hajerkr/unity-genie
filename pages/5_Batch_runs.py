@@ -147,7 +147,7 @@ def submit_job(fw, session,gearname):
     INPUT_DICT = {"gambas": "input", "qa": "input", "mriqc": "nifti", "mrr": "axi"}
     status = st.empty()
     job_ids = []
-    tags = ["mriqc":"qc","gambas":"gpu"]
+    tags = {"mriqc":"qc","gambas":"gpu"}
     # Look at every acquisition in the session
     for acquisition in session.acquisitions.find(f'label=~{INCLUDE_PATTERN}'):
         inputs = {}
