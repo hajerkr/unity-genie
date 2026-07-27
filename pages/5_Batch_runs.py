@@ -850,7 +850,7 @@ if st.button("Run Batch Job"):
             job_list = run_jobs(fw, fw_project, 'freesurfer-recon-all', gambas=False)
 
     elif selected_gear == "GAMBAS":
-        job_list = run_gambas_jobs(fw, fw_project)
+        job_list = run_gambas_jobs(fw, fw_project, analysis_tag='gpu')
 
     elif selected_gear=="SuperSynth":
         job_list = run_jobs(fw, fw_project, 'supersynth', gambas=input_type, analysis_tag='gpuplus')
