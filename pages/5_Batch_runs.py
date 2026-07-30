@@ -791,7 +791,7 @@ selected_gear_name = st.selectbox("Select Gear", gear_categories[selected_catego
 
 # Only show radio button if selected gear is not QA
 if selected_gear_name not in ["QA","MRIQC","Freesurfer-recon-all", "MRR","GAMBAS"] :
-    input_type = st.radio("Select input source to use:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear_name.lower() else 1 if "gambas" in selected_gear.lower() else 2 if "superfield" in selected_gear.lower() else 3)
+    input_type = st.radio("Select input source to use:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear_name.lower() else 1 if "gambas" in selected_gear_name.lower() else 2 if "superfield" in selected_gear_name.lower() else 3)
 else:
     input_type = None  # or set a default value if your downstream code needs it
 
