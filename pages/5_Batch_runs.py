@@ -763,7 +763,7 @@ fw = flywheel.Client(st.session_state.api_key if st.session_state.authenticated 
 st.markdown("⚠️ **Please do not refresh the page while the batch job is running to avoid interruptions.**")
 
 st.title("📦 Batch Runs")
-st.write("Select a gear to batch run to view details:")
+st.write("Select a gear to batch run:")
 # gear_list = fw.gears()
 # gear_names = [gear.gear.name for gear in gear_list]
 #Order them alphabetically
@@ -772,12 +772,26 @@ st.write("Select a gear to batch run to view details:")
 gear_names = ["QA","MRIQC","Circumference", "MRR", "Freesurfer-recon-all", "Infant-freesurfer", "iBEAT", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
 gear_names.sort()
 selected_gear_name = st.selectbox("Select Gear", gear_names)
+# Define categories for the dropdown options
+gear_categories = {
+    "Quality Assurance": ["QA", "MRIQC"],
+    "Reconstruction": ["MRR"], #add CISO maybe
+    "Segmentation": ["Freesurfer-recon-all", "Infant-freesurfer", "iBEAT", "BIBSNET (baby-and-infant-brain-segmentation)","Minimorph", "SuperSynth","Recon-all-clinical", "Recon-any"],
+    "Advanced Processing": ["GAMBAS"], #Add superfield later
+    "Other": ["Circumference"]
+}
+
+# Create a selectbox for categories
+selected_category = st.selectbox("Select Gear Category", list(gear_categories.keys()))
+
+# Populate the gear dropdown based on the selected category
+selected_gear_name = st.selectbox("Select Gear", gear_categories[selected_category])
 selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
 #Radio button for gambas or MRR input if applicable
 
 # Only show radio button if selected gear is not QA
 if selected_gear_name not in ["QA","MRIQC","Freesurfer-recon-all", "MRR","GAMBAS"] :
-    input_type = st.radio("Select input type for segmentation gears:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear.lower() else 1 if "gambas" in selected_gear.lower() else 2 if "superfield" in selected_gear.lower() else 3)
+    input_type = st.radio("Select input source to use:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear.lower() else 1 if "gambas" in selected_gear.lower() else 2 if "superfield" in selected_gear.lower() else 3)
 else:
     input_type = None  # or set a default value if your downstream code needs it
 
@@ -790,7 +804,7 @@ selected_project = next((project for project in project_list if project.label ==
 if selected_project is None:
     st.warning("Please select a valid project.")
     st.stop()
-st.info(f"Project: {selected_project.label} Subjects n = {len(selected_project.subjects())}  \nSessions n = {len(selected_project.sessions())}")
+st.info(f"Project: {selected_project.label}\nSubjects N = {len(selected_project.subjects())}\nSessions N = {len(selected_project.sessions())}")
 fw_project = fw.projects.find_first(f'label={selected_project.label}')
 acq_label_string = None
 
@@ -820,8 +834,25 @@ if debug_mode:
     st.warning(f"⚠️ Debug Mode is ON: The batch job will only run on the first {n_sessions_debug} sessions of the selected project.")
     st.session_state.debug_mode = True
 #If you select the gear and project, and click a button, run the batch job
+gear_name_mapping = {}
+gear_name_mapping = {
+    "QA": "qa",
+    "MRIQC": "mriqc",
+    "Circumference": "circumference",
+    "MRR": "mrr",
+    "Freesurfer-recon-all": "freesurfer-recon-all",
+    "Infant-freesurfer": "infant-freesurfer",
+    "iBEAT": "ibeat2",
+    "BIBSNET (baby-and-infant-brain-segmentation)": "baby-and-infant-brain-segmentation",
+    "Recon-all-clinical": "recon-all-clinical",
+    "Recon-any": "recon-any",
+    "GAMBAS": "gambas",
+    "Minimorph": "minimorph",
+    "SuperSynth": "supersynth",
+    "SynthSR":"synthsr"
+}
 if st.button("Run Batch Job"):
-    st.success(f"Running batch job for gear: {selected_gear} on project: {selected_project.label}, on {input_type if input_type is not None else acq_label_string} input")
+    st.success(f"Running batch jobs for gear: {selected_gear} \nProject: {selected_project.label}, on {input_type if input_type is not None else acq_label_string} input")
     #Prepare dataframe to log job submissions (session variable)
     st.session_state.job_log = []
 
@@ -862,14 +893,14 @@ if st.button("Run Batch Job"):
         else:
             st.info("No BIBSNET jobs were submitted.")
 
-    elif selected_gear == "Freesurfer-recon-all":
+    elif selected_gear == "Freesurfer-recon-all" or selected_gear == "SynthSR":
         #This only takes T1w images
         #Have user enter i a textbox the string to look for in the acquisition label
         #acq_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
         if  acq_label_string:
             
             #st.warning(f"⚠️ Note: The string you entered is '{acq_label_string}'. Please ensure that this string is specific enough to uniquely identify the desired T1w acquisition. Check your project first.\nFor example, if you have multiple T1w acquisitions, you might want to use 'MPRAGE' or 'T1w' instead of just 'T1'.")
-            job_list = run_jobs(fw, fw_project, 'freesurfer-recon-all', input_type=input_type, acq_label_string=acq_label_string)
+            job_list = run_jobs(fw, fw_project, selected_gear.lower(), input_type=input_type, acq_label_string=acq_label_string)
 
     elif selected_gear == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
