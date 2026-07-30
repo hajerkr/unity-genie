@@ -706,7 +706,7 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
                                 break
                             
                     if not inputfile:
-                        status.text(f"⚠️ No suitable acquisition found with label containing {" or ".join(acq_label_string)}. Skipping session.")
+                        status.text(f"⚠️ No suitable acquisition found with label containing {' or '.join(acq_label_string)}. Skipping session.")
                         skipped_sessions += 1
                         #Need to log this
                         skipped_sessions_list.append(session.label)
