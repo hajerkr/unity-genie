@@ -812,11 +812,10 @@ if selected_gear_name == "Freesurfer-recon-all" or input_type == "Other (Acquisi
     #Note: user should be as specific as possible to avoid accidentally selecting the wrong acquisition. For example, if you have multiple T1w acquisitions, you might want to use "MPRAGE" or "T1w" instead of just "T1".
     acq_label_strings = st.text_input("Enter strings to identify the acquisition labels in your project (comma-separated, e.g., MPRAGE,T1w):", value="MPRAGE")
     acq_label_string = [label.strip() for label in acq_label_strings.split(",") if label.strip()]
-    st.session_state.acq_label = acq_label_string
     st.info("⚠️ Note: Please ensure that the strings you enter are specific enough to uniquely identify the desired acquisitions. Check your project first.")
     input_type = "Other (Acquisition)"
     
-
+st.session_state.acq_label = acq_label_string
 #Add checkbox "debug" to only run on first 2 sessions
 st.session_state.debug_mode =  False
 n_sessions_debug = 4
