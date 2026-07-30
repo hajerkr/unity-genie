@@ -769,9 +769,9 @@ st.write("Select a gear to batch run:")
 #Order them alphabetically
 
 #For now only keep circumference, freesurfer-recon-all-clinical, gambas, minimorph
-gear_names = ["QA","MRIQC","Circumference", "MRR", "Freesurfer-recon-all", "Infant-freesurfer", "iBEAT", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
-gear_names.sort()
-selected_gear_name = st.selectbox("Select Gear", gear_names)
+#gear_names = ["QA","MRIQC","Circumference", "MRR", "Freesurfer-recon-all", "Infant-freesurfer", "iBEAT", "BIBSNET (baby-and-infant-brain-segmentation)","Recon-all-clinical","Recon-any","GAMBAS", 'Minimorph',"SuperSynth"]
+#gear_names.sort()
+#selected_gear_name = st.selectbox("Select Gear", gear_names)
 # Define categories for the dropdown options
 gear_categories = {
     "Quality Assurance": ["QA", "MRIQC"],
@@ -786,12 +786,12 @@ selected_category = st.selectbox("Select Gear Category", list(gear_categories.ke
 
 # Populate the gear dropdown based on the selected category
 selected_gear_name = st.selectbox("Select Gear", gear_categories[selected_category])
-selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
+#selected_gear = next((gear for gear in gear_names if gear == selected_gear_name), None)
 #Radio button for gambas or MRR input if applicable
 
 # Only show radio button if selected gear is not QA
 if selected_gear_name not in ["QA","MRIQC","Freesurfer-recon-all", "MRR","GAMBAS"] :
-    input_type = st.radio("Select input source to use:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear.lower() else 1 if "gambas" in selected_gear.lower() else 2 if "superfield" in selected_gear.lower() else 3)
+    input_type = st.radio("Select input source to use:", ("MRR", "GAMBAS", "SuperField","Other (Acquisition)"), index=0 if "mrr" in selected_gear_name.lower() else 1 if "gambas" in selected_gear.lower() else 2 if "superfield" in selected_gear.lower() else 3)
 else:
     input_type = None  # or set a default value if your downstream code needs it
 
@@ -808,7 +808,7 @@ st.info(f"Project: {selected_project.label}\nSubjects N = {len(selected_project.
 fw_project = fw.projects.find_first(f'label={selected_project.label}')
 acq_label_string = None
 
-if selected_gear == "Freesurfer-recon-all" or input_type == "Other (Acquisition)":
+if selected_gear_name == "Freesurfer-recon-all" or input_type == "Other (Acquisition)":
     #Note: user should be as specific as possible to avoid accidentally selecting the wrong acquisition. For example, if you have multiple T1w acquisitions, you might want to use "MPRAGE" or "T1w" instead of just "T1".
     acq_label_strings = st.text_input("Enter strings to identify the acquisition labels in your project (comma-separated, e.g., MPRAGE,T1w):", value="MPRAGE")
     acq_label_string = [label.strip() for label in acq_label_strings.split(",") if label.strip()]
@@ -852,14 +852,14 @@ gear_name_mapping = {
     "SynthSR":"synthsr"
 }
 if st.button("Run Batch Job"):
-    st.success(f"Running batch jobs for gear: {selected_gear} \nProject: {selected_project.label}, on {input_type if input_type is not None else acq_label_string} input")
+    st.success(f"Running batch jobs for gear: {selected_gear_name} \nProject: {selected_project.label}, on {input_type if input_type is not None else acq_label_string} input")
     #Prepare dataframe to log job submissions (session variable)
     st.session_state.job_log = []
 
-    if selected_gear == "Circumference":
+    if selected_gear_name == "Circumference":
         run_circumference_gear(fw, fw_project,input_type=input_type)
 
-    elif selected_gear == "Recon-all-clinical":
+    elif selected_gear_name == "Recon-all-clinical":
         
         job_list = run_jobs( fw, fw_project,'recon-all-clinical', input_type=input_type,acq_label_string=acq_label_string)
         if job_list:
@@ -868,7 +868,7 @@ if st.button("Run Batch Job"):
         else:
             st.info("No recon-all-clinical jobs were submitted.")
 
-    elif selected_gear == "Recon-any":
+    elif selected_gear_name == "Recon-any":
         job_list = run_jobs( fw, fw_project,'recon-any', input_type=input_type,acq_label_string=acq_label_string)
         if job_list:
             st.success(f"Submitted {len(job_list)} recon-any jobs.")
@@ -876,7 +876,7 @@ if st.button("Run Batch Job"):
         else:
             st.info("No recon-any jobs were submitted.")
 
-    elif selected_gear == "Infant-freesurfer":
+    elif selected_gear_name == "Infant-freesurfer":
         #Add a true / false checkbox to 
         job_list = run_jobs(fw, fw_project, 'infant-freesurfer', input_type=input_type)
         if job_list:
@@ -885,7 +885,7 @@ if st.button("Run Batch Job"):
         else:
             st.info("No infant-freesurfer jobs were submitted.")
 
-    elif selected_gear == "BIBSNET (baby-and-infant-brain-segmentation)":
+    elif selected_gear_name == "BIBSNET (baby-and-infant-brain-segmentation)":
         job_list = run_jobs(fw, fw_project, 'baby-and-infant-brain-segmentation', input_type=input_type)
         if job_list:
             st.success(f"Submitted {len(job_list)} BIBSNET jobs.")
@@ -893,30 +893,30 @@ if st.button("Run Batch Job"):
         else:
             st.info("No BIBSNET jobs were submitted.")
 
-    elif selected_gear == "Freesurfer-recon-all" or selected_gear == "SynthSR":
+    elif selected_gear_name == "Freesurfer-recon-all" or selected_gear_name == "SynthSR":
         #This only takes T1w images
         #Have user enter i a textbox the string to look for in the acquisition label
         #acq_label_string = st.text_input("Enter string to identify T1w acquisition labels in your project (RMS, MPR, T1w):", value="MPRAGE")
         if  acq_label_string:
             
             #st.warning(f"⚠️ Note: The string you entered is '{acq_label_string}'. Please ensure that this string is specific enough to uniquely identify the desired T1w acquisition. Check your project first.\nFor example, if you have multiple T1w acquisitions, you might want to use 'MPRAGE' or 'T1w' instead of just 'T1'.")
-            job_list = run_jobs(fw, fw_project, selected_gear.lower(), input_type=input_type, acq_label_string=acq_label_string)
+            job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=input_type, acq_label_string=acq_label_string)
 
-    elif selected_gear == "GAMBAS":
+    elif selected_gear_name == "GAMBAS":
         job_list = run_gambas_jobs(fw, fw_project)
 
-    elif selected_gear=="SuperSynth":
+    elif selected_gear_name=="SuperSynth":
         job_list = run_jobs(fw, fw_project, 'supersynth', input_type=input_type, acq_label_string=acq_label_string, analysis_tag='gpuplus')
     
-    elif selected_gear=="iBEAT":
+    elif selected_gear_name=="iBEAT":
         job_list = run_jobs(fw, fw_project, 'ibeat2', input_type=input_type, analysis_tag='gpu')
 
-    elif selected_gear in ["QA","MRIQC"]:
+    elif selected_gear_name in ["QA","MRIQC"]:
         #Hide input type buttons
-        job_list = run_jobs(fw, fw_project, selected_gear.lower(), input_type=input_type, analysis_tag=selected_gear.lower())
+        job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=input_type, analysis_tag=selected_gear_name.lower())
     
-    elif selected_gear == "MRR":
-        job_list = run_jobs(fw, fw_project, selected_gear.lower(), input_type=None, analysis_tag=selected_gear.lower())
+    elif selected_gear_name == "MRR":
+        job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=None, analysis_tag=selected_gear_name.lower())
     else:
-        job_list = run_jobs(fw, fw_project, selected_gear.lower(), input_type=input_type)
+        job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=input_type)
 
