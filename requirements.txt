@@ -26,7 +26,6 @@ nilearn
 scikit-image
 
 # Flywheel SDK
-flywheel
 flywheel-sdk==17.8.0
 fw-client==2.1.1
 
