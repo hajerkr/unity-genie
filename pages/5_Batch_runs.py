@@ -72,21 +72,53 @@ def is_complete(asys,gearname,latest_version=False):
     # )
 
 def is_status(asys,gearname, status, latest_version=False):
+    # try:
+    #     asys=asys.reload()
+    #     gear = fw.gears.find_first(f"gear.name={gearname}")
+    #     #Get gear version
+    #     gear_version = gear.gear.version if gear else "Unknown"
+    #     return (
+    #         asys.gear_info is not None
+    #         and gearname in asys.gear_info.get('name')
+    #         and asys.job is not None
+    #         and asys.job.get('state') in status
+    #         and (not latest_version or asys.gear_info.get('version') == gear_version)
+    #     )
+    # except Exception as e:
+    #     logger.exception(f"Error checking {status} status for analysis {asys.id}: {e}")
+    #     return False
     try:
-        asys=asys.reload()
-        gear = fw.gears.find_first(f"gear.name={gearname}")
-        #Get gear version
-        gear_version = gear.gear.version if gear else "Unknown"
-        return (
-            asys.gear_info is not None
-            and gearname in asys.gear_info.get('name')
-            and asys.job is not None
-            and asys.job.get('state') in status
-            and (not latest_version or asys.gear_info.get('version') == gear_version)
-        )
+        
+        if getattr(asys, 'gear_info', None) is not None:
+            asys=asys.reload()
+            
+            #If asys has attribute gear_info
+            gear = fw.gears.find_first(f"gear.name={gearname}")
+            #Get gear version
+            gear_version = gear.gear.version if gear else "Unknown"
+            #print(asys.gear_info, asys.gear_info.get('name'), asys.gear_info.get('name') == gearname, asys.job.get('state') )
+            return (
+                asys.gear_info is not None
+                and asys.gear_info.get('name') == gearname
+                and asys.job is not None
+                and asys.job.get('state') == 'complete'
+                #ensure last gear version is ran
+                and (not latest_version or asys.gear_info.get('version') == gear_version)
+            )
+        
+        elif gearname =="gambas":
+    
+                logger.info(f"Analysis {asys.id} has no gear_info, checking label for gambas-batch...")
+                #Look at analysis container containing "gambas-batch" in the label
+                logger.info(asys.label)
+                return (
+                    "gambas" in asys.label and ("0.4.17" in asys.label or "0.4.14" in asys.label)
+                    and len(asys.files) > 0
+                )
     except Exception as e:
-        logger.exception(f"Error checking {status} status for analysis {asys.id}: {e}")
+        logger.info(f"Error reloading analysis {asys.id}: {e}")
         return False
+    
     
 # def is_failed(asys,gearname, latest_version=False):
 
@@ -125,7 +157,7 @@ def run_gambas_jobs(fw, project):
     failed_sessions = 0
     status = st.empty()
     failed_sessions_list = []
-    for session in project.sessions():
+    for session in sorted(project.sessions(), key=lambda s: s.created, reverse=True):
         #If it hasn't ran gambas yet, run it
         # Find the most recent gambas analysis
         gambas_file = find_latest_gambas_file(session)
@@ -553,7 +585,8 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
     project = project_.reload()
     # Loop through sessions
     if st.session_state.debug_mode:
-        sessions = project.sessions()[:4]
+        sessions =  sorted(project.sessions(), key=lambda s: s.created, reverse=True)
+        sessions = sessions[:4]
         #st.info("⚠️ Debug Mode: Processing only first 4 sessions.")
     else:
         sessions = project.sessions()
@@ -671,7 +704,7 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
                     for acquisition in session.acquisitions():
                         logger.info(acquisition.label)
                         acquisition = acquisition.reload()
-                        if any(label.lower() in acquisition.label.lower() for label in acq_label_string):
+                        if any(label.lower() in acquisition.label.lower() for label in acq_label_string) and not any(exclude_label.lower() in acquisition.label.lower() for exclude_label in exclude_acq_label_string):
                             for file in acquisition.files:
                                 if file.type == 'nifti':
                                     inputfile = file
@@ -806,7 +839,7 @@ if selected_project is None:
     st.stop()
 st.info(f"Project: {selected_project.label}\nSubjects N = {len(selected_project.subjects())}\nSessions N = {len(selected_project.sessions())}")
 fw_project = fw.projects.find_first(f'label={selected_project.label}')
-acq_label_string = None
+acq_label_string, exclude_acq_label_string = None, None
 
 if selected_gear_name == "Freesurfer-recon-all" or input_type == "Other (Acquisition)":
     #Note: user should be as specific as possible to avoid accidentally selecting the wrong acquisition. For example, if you have multiple T1w acquisitions, you might want to use "MPRAGE" or "T1w" instead of just "T1".
@@ -815,7 +848,13 @@ if selected_gear_name == "Freesurfer-recon-all" or input_type == "Other (Acquisi
     st.info("⚠️ Note: Please ensure that the strings you enter are specific enough to uniquely identify the desired acquisitions. Check your project first.")
     input_type = "Other (Acquisition)"
     
+    #Add strings to exclude
+    exclude_acq_label_strings = st.text_input("Enter strings to exclude acquisition labels (comma-separated, e.g., T1w,T2w):", value="")
+    exclude_acq_label_string = [label.strip() for label in exclude_acq_label_strings.split(",") if label.strip()]
+    
 st.session_state.acq_label = acq_label_string
+st.session_state.exclude_acq_label = exclude_acq_label_string
+
 #Add checkbox "debug" to only run on first 2 sessions
 st.session_state.debug_mode =  False
 n_sessions_debug = 4
