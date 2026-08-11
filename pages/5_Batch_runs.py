@@ -174,7 +174,7 @@ def run_gambas_jobs(fw, project):
             status.text(f"🚀 Submitted gambas job for session {session.label}")
         else:
             failed_sessions += 1
-            failed_sessions_list.append(session.label)
+            failed_sessions_list.append((session.subject.label, session.label))
             status.text(f"❌ Failed to submit GAMBAS job for session {session.label}")
     
 
@@ -186,8 +186,8 @@ def run_gambas_jobs(fw, project):
 
     st.info(f"\n📊 Summary:  \n   ✅ Jobs submitted: {processed_sessions}\n   ⏭️ Sessions skipped: {skipped_sessions}\n   ❌ Sessions failed: {failed_sessions}\n   📋 Total job IDs: {len(job_list)}")
     #Return CSV with skipped sessions
-    if failed_sessions_list.append(session.label):
-        skipped_sessions_str = "\n".join(failed_sessions_list.append(session.label))
+    if failed_sessions_list:
+        skipped_sessions_str = "\n".join([", ".join(item) for item in failed_sessions_list])
         st.download_button(
             label="Download Failed Sessions",
             data=skipped_sessions_str,
@@ -768,7 +768,7 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
         st.download_button(
             label="Download Skipped Sessions",
             data=skipped_sessions_str,
-            file_name="skipped_sessions.txt",
+            file_name=f"skipped_sessions_{project.label}_{gearname}.txt",
             mime="text/plain"
         )
     
@@ -943,4 +943,4 @@ if st.button("Run Batch Job"):
 
     else:
         job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=input_type)
-    submit_and_report(fw, job_list, selected_gear_name)
+        submit_and_report(fw, job_list, selected_gear_name)
