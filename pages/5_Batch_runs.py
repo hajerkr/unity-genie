@@ -217,9 +217,9 @@ def submit_job(fw, session,gearname):
         match = next(
         (f for f in acquisition.files
          if f.type == 'nifti'
-         and INCLUDE_PATTERN in f.name
-         and not any(p in f.name for p in EXCLUDE_PATTERNS)
-         and any(plane in f.name for plane in GEAR_PLANE_TYPES.get(gearname, []))),
+         and INCLUDE_PATTERN.lower() in f.name.lower()
+         and not any(p.lower() in f.name.lower() for p in EXCLUDE_PATTERNS)
+         and any(plane.lower() in f.name.lower() for plane in GEAR_PLANE_TYPES.get(gearname, []))),
         None
         )
 
@@ -638,8 +638,9 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
                     job_id =  submit_job(fw, session, gearname)
                     job_list.extend(job_id)
                     processed_sessions += 1
-                    status.text(f"🚀 Submitted {gearname} job for session {session_id}")
-                    logger.info(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
+                    if job_id:
+                        status.text(f"🚀 Submitted {gearname} job for session {session_id}")
+                        logger.info(f"🚀 Submitted {gearname} job (ID: {job_id}) for session {session_id}")
                     
                 ### GAMBAS CHECKS ####
                 elif input_type == "GAMBAS":
