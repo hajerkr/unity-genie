@@ -583,6 +583,7 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
     st.info(f"🚀 Starting {gearname} job submission.  \n📁 Processing project: {project.label}")
     project_ = fw.projects.find_first(f'label={project.label}')
     project = project_.reload()
+    logger.info(f"Input type and acq label string {input_type},{acq_label_string}")
     # Loop through sessions
     if st.session_state.debug_mode:
         sessions =  sorted(project.sessions(), key=lambda s: s.created, reverse=True)
@@ -705,7 +706,7 @@ def run_jobs(fw, project, gearname, input_type=False, acq_label_string=None,anal
                     for acquisition in session.acquisitions():
                         logger.info(acquisition.label)
                         acquisition = acquisition.reload()
-                        if any(label.lower() in acquisition.label.lower() for label in acq_label_string) and not any(exclude_label.lower() in acquisition.label.lower() for exclude_label in exclude_acq_label_string):
+                        if any(label.lower() in acquisition.label.lower() for label in acq_label_string) and not any(exclude_label.lower() in acquisition.label.lower() for exclude_label in st.session_state.exclude_acq_label):
                             for file in acquisition.files:
                                 if file.type == 'nifti':
                                     inputfile = file
@@ -925,7 +926,7 @@ if st.button("Run Batch Job"):
         # These only take T1w images
         if acq_label_string:
             job_list = run_jobs(fw, fw_project, selected_gear_name.lower(),
-                                input_type=input_type, acq_label_string=acq_label_string)
+                                input_type=input_type, acq_label_string=st.session_state.acq_label)
             submit_and_report(fw, job_list, selected_gear_name)
 
     elif selected_gear_name in ("QA", "MRIQC"):
@@ -943,5 +944,8 @@ if st.button("Run Batch Job"):
         submit_and_report(fw, job_list, selected_gear_name)
 
     else:
-        job_list = run_jobs(fw, fw_project, selected_gear_name.lower(), input_type=input_type)
-        submit_and_report(fw, job_list, selected_gear_name)
+        job_list = run_jobs(fw, fw_project, selected_gear_name.lower(),
+                         input_type=input_type,
+                         acq_label_string=acq_label_string)
+        
+       
