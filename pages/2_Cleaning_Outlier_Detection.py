@@ -20,9 +20,11 @@ import datetime
 import re
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches 
+import matplotlib.patches as mpatches
 import seaborn as sns
 import yaml
+
+from utils.utils import get_session_data_dir
 
 pd.set_option('display.max_columns', None)
 
@@ -777,8 +779,7 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
 
     all_outliers_df = df_out[df_out["any_outlier"]].copy()
 
-    os.makedirs(os.path.join(work_dir.parent, "data"), exist_ok=True)
-    final_outliers_path = os.path.join(work_dir.parent, "data", f"{group_str}_all_outliers.csv")
+    final_outliers_path = os.path.join(get_session_data_dir(), f"{group_str}_all_outliers.csv")
     all_outliers_df.to_csv(final_outliers_path, index=False)
     #st.write("Last 10 columns of outliers dataframe:", all_outliers_df.iloc[:, -10:].head())
     return df_out, final_outliers_path, all_outliers_df
@@ -907,7 +908,7 @@ def main():
                 progress.progress((np.where(unique_groups == group)[0][0] + 1) / len(unique_groups))
 
             final_outliers_df = pd.concat(all_outlier_dfs, ignore_index=True) if all_outlier_dfs else pd.DataFrame()
-            final_outliers_path = os.path.join(work_dir.parent, "data", "all_groups_all_outliers.csv")
+            final_outliers_path = os.path.join(get_session_data_dir(), "all_groups_all_outliers.csv")
             final_outliers_df.to_csv(final_outliers_path, index=False)
 
         else:
@@ -915,8 +916,7 @@ def main():
             processed, final_outliers_path, outliers = process_outliers(df, df_demo, keywords)
             st.session_state["processed_df"] = processed
 
-        os.makedirs(os.path.join(work_dir.parent, "data"), exist_ok=True)
-        processed_path = os.path.join(work_dir.parent, "data", "allData_outlierFlagged.csv")
+        processed_path = os.path.join(get_session_data_dir(), "allData_outlierFlagged.csv")
         st.session_state["processed_df"].to_csv(processed_path, index=False)
         st.session_state["processed_path"] = processed_path
         st.session_state["final_outlier_paths"] = final_outliers_path
@@ -968,7 +968,7 @@ def main():
         st.success("Outliers cleaned.")
         st.write(f"Size of dataframe after cleaning: {clean_df.shape}")
 
-        clean_path = os.path.join(work_dir.parent, "data", "alldata_cleaned.csv")
+        clean_path = os.path.join(get_session_data_dir(), "alldata_cleaned.csv")
         cols = clean_df.columns.tolist()
         front_cols = [
             "CohortName", "StudyID", "studyTimepoint", "childTimepointAge_months",
@@ -984,7 +984,7 @@ def main():
         st.dataframe(clean_df.head())
         if os.path.exists(clean_path):
             with open(clean_path, "rb") as f:
-                st.download_button("Download clean CSV", f, file_name=clean_path)
+                st.download_button("Download clean CSV", f, file_name=os.path.basename(clean_path))
 
 
 if __name__ == "__main__":

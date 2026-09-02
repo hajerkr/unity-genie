@@ -25,9 +25,13 @@ from PIL import Image
 
 log = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# HELPERS
-# ---------------------------------------------------------------------------
+import streamlit as st
+from IPython.display import Image as IPImage, display
+from PIL import Image
+# from utils.giftomp4 import *
+import moviepy.editor as mp
+from utils.authentication import login_screen
+from utils.utils import get_session_data_dir
 
 def get_ratings_filename():
     return (
@@ -336,7 +340,11 @@ def check_previous_reviews(project, username):
             dl_dir = os.path.join(Path(__file__).parent, "..", "data")
             os.makedirs(dl_dir, exist_ok=True)
             for csv_file in csv_files:
-                old_path = os.path.join(dl_dir, csv_file.name)
+                # Download CSV file
+                #Make directory if it does not exist
+                
+                download_dir = get_session_data_dir()
+                old_ratings_file_path = os.path.join(download_dir, csv_file.name)
                 try:
                     latest.download_file(csv_file.name, old_path)
                     reviewed = True
@@ -355,58 +363,64 @@ def check_previous_reviews(project, username):
         user_asys_id          = analysis.id
         st.session_state.asys = analysis
 
-    return reviewed, user_asys_id, old_path
+    return reviewed, user_asys_id, old_ratings_file_path
+
+def find_csv_file(directory, username):
+    username_cleaned = username.replace(" ", "_")
+    
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if username_cleaned in file and file.endswith(".csv"):
+                return os.path.join(root, file)  # Return the first matching file found
+
+    return None  # No matching file found
 
 
-# ---------------------------------------------------------------------------
-# PER-SUBJECT QC FORM
-# ---------------------------------------------------------------------------
+def download_qc_file(out_dir):
 
-def qc_subject(row, segmentation_tool, metrics, media_placeholder):
-    timestamp     = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    sub_label     = row[st.session_state.subject] 
-    ses_label     = row[st.session_state.session] 
-    project_label = row[st.session_state.project]
-    download_dir  = os.path.join(Path(__file__).parent, "..", "data")
-    viz_mode      = st.session_state.get("viz_mode", "mp4")
+    if os.path.exists(out_dir):
+        with open(out_dir, "rb") as f:
+            st.download_button("Download CSV", f, file_name=os.path.basename(out_dir))
+            
+     
 
-    st.write(f"### Subject: `{sub_label}`  |  Session: `{ses_label}`")
-    st.session_state.responses = [
-        st.session_state.username, timestamp, project_label, sub_label, ses_label
-    ]
+def qc_subject(row, segmentation_tool, metrics):
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    input_gear, gear_v = None, None #row["input_gear_v"].split("/")[0], row["input_gear_v"].split("/")[1]
+    sub_label, ses_label = row["subject"],row["session"]
+    asys = row.get("analysis_id", None)
+    project_label = row["project"].strip()
+    print(project_label)
 
-    # Outlier regions
-    df_out = st.session_state.df_outliers
-    df_out.drop(columns=["is_outlier"], errors="ignore", inplace=True)
-    filtered_cols = [
-        c for c in df_out.columns
-        if (c.endswith("_zscore") or c.endswith("_cov"))
-        and not c.startswith("n_roi_outliers")
-    ]
-    outlier_rois = [re.sub(r"^(mm_|ra_)", "", c) for c in filtered_cols if row[c] == 1]
-    outliers     = list(set(outlier_rois))
+    project = fw.projects.find_first(f'label={project_label}')
+    project = project.reload()
+    
+    download_dir = get_session_data_dir()
+    st.write(f"### Subject: {sub_label} Session: {ses_label}")
 
-    # ---- Display media -----------------------------------------------------
-    try:
-        media_placeholder.empty()
+    st.session_state.responses = [st.session_state.username, timestamp, project_label, sub_label, ses_label] 
+    
+    st.session_state.df_outliers.drop(columns=['is_outlier'])
+    filtered_cols = [col for col in st.session_state.df_outliers.columns if (
+                                            (col.endswith("_zscore") or col.endswith("_cov"))
+                                            and not col.startswith("n_roi_outliers")
+                                        )]
+    # 2. From those, keep only columns where the value is 1
+    outlier_rois = [col for col in filtered_cols if row[col] == 1]
+    #Get rid of the suffix in the names (mm_ and ra_)
+    outlier_rois = [re.sub(r'^(mm_|ra_)', '', col) for col in outlier_rois]
 
-        if viz_mode == "mp4":
-            mp4_path = os.path.join(download_dir, sub_label, ses_label, "overlay_3planes.mp4")
-            with media_placeholder.container():
-                st.video(mp4_path)
-        else:
-            png_path = os.path.join(download_dir, sub_label, ses_label, "qc_slices.png")
-            with media_placeholder.container():
-                st.image(png_path, use_container_width=True)
+    # print("Outlier regions for this subject (using z score and cov):")
+    # print(f"{set(outlier_rois)}")
+    outliers = list(set(outlier_rois))
 
-    except Exception as e:
-        st.error(f"Error loading media for {sub_label} {ses_label}: {e}")
-        st.stop()
+    #Display the video
+    out_mp4 = f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4"
+    st.video(out_mp4)
+    st.write ('⚠️ Regions with outlier metrics for this subject (using z score and cov):')
+    st.write(f"{outliers}")
 
-    st.write("⚠️ **Regions with outlier metrics** (z-score / CoV):")
-    st.write(outliers if outliers else "_None flagged_")
-
-    # ---- QC form -----------------------------------------------------------
+   
     with st.form("qc_form", clear_on_submit=True):
         st.write("Answer the questions below:")
 
@@ -581,7 +595,70 @@ if ready:
     if not st.session_state.data_prepared:
         project_labels = st.session_state.df_outliers[st.session_state.project].unique()
         if len(project_labels) == 1:
-            project = fw.projects.find_first(f"label={project_labels[0]}").reload()
+            project_label = project_labels[0]
+            project = fw.projects.find_first(f'label={project_label}')
+            project = project.reload()
+            #Check if QC file is already in the project files and load previous ratings to skip already rated subjects
+            reviewed, user_asys_id, old_ratings_file_path = check_previous_reviews(project, st.session_state.username)
+            if reviewed:
+                st.warning(f"You have already reviewed some subjects for this project. Previous ratings will be loaded from {st.session_state.asys.label}.")
+                previous_ratings_df = pd.read_csv(old_ratings_file_path)
+                st.dataframe(previous_ratings_df)
+                # print(previous_ratings_df)
+                #Filter out already rated subjects-sessions from df_outliers
+                rated_subjects_sessions = previous_ratings_df[['subject', 'session']].apply(tuple, axis=1).tolist()
+                # rated_subjects = previous_ratings_df['subject'].unique()
+                st.session_state.df_outliers['sub_ses'] = st.session_state.df_outliers[['subject', 'session']].apply(tuple, axis=1)
+                st.session_state.df_outliers = st.session_state.df_outliers[~st.session_state.df_outliers['sub_ses'].isin(rated_subjects_sessions)]
+                
+                # st.session_state.df_outliers = st.session_state.df_outliers[~st.session_state.df_outliers['subject'].isin(rated_subjects)]
+                st.write(f"Remaining subjects to review: {st.session_state.df_outliers.shape[0]}")
+                # st.dataframe(st.session_state.df_outliers)
+
+            #Download all the data for the outliers using the get_data function
+            for _, row in st.session_state.df_outliers.iterrows():
+                sub_label, ses_label = row["subject"],row["session"]
+                asys = row.get("analysis_id", None)
+                sub_label, ses_label = row["subject"],row["session"]
+                project_label = row["project"].strip()
+
+                project = fw.projects.find_first(f'label={project_label}')
+                project = project.reload()
+                
+                download_dir = get_session_data_dir()
+                with st.spinner(f"Downloading data for subject {sub_label} - {ses_label}..."):
+                    get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir, project, st.session_state.api_key)
+
+                    segmentation_path , native_scan_path = None, None
+                    files = os.listdir(path=f"{download_dir}/{sub_label}/{ses_label}")
+
+                    for file in files:
+                        print(file)
+                        if file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz'):
+                            segmentation_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+                        if file.endswith('synthSR.nii.gz'):
+                            print("Found synthSR")
+                            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+                            #As soon as we find segmentation and native scan, we can stop    
+                        elif file.endswith('.nii.gz') and not file.endswith(f'{segmentation_suffix[segmentation_tool]}.nii.gz') and st.session_state.segmentation_tool != "recon-all-clinical":   
+                            
+                            native_scan_path = os.path.join(f"{download_dir}/{sub_label}/{ses_label}",file)
+
+                    if segmentation_path is None or native_scan_path is None:
+                        st.error(f"Missing files for {sub_label} {ses_label}. Skipping...")
+                        continue
+
+                    print("NATIVE SCAN AND SEGMENTATION SCAN: ", native_scan_path, segmentation_path)
+                    out_mp4 = nifti_overlay_gif_3planes(native_scan_path, segmentation_path,
+                        out_gif=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.gif",
+                        out_mp4=f"{download_dir}/{sub_label}/{ses_label}/overlay_3planes.mp4",
+                        target_height=200, alpha=0.4, cmap="viridis",
+                        fps=5, layout="horizontal")
+                    
+                    #When the video is ready, delete the local nifti files to save space
+                    os.remove(native_scan_path)
+                    os.remove(segmentation_path)
+                    #get_data(sub_label, ses_label, asys, segmentation_tool, None, None, download_dir=os.path.join(Path(__file__).parent,"..","data"), project=project, api_key=st.session_state.api_key)
 
             reviewed, _, old_path = check_previous_reviews(project, st.session_state.username)
             if reviewed:
