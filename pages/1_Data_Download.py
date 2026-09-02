@@ -148,11 +148,14 @@ def download_session_data(fw, project, session_id, project_path,
         tool_analyses = [a for a in analyses if a.gear_info.name == segmentation_tool]
 
         if input_source in ("MRR", "Both"):
+            mrr_analyses = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
             mrr_analyses.extend(get_latest(tool_analyses, "mrr"))
 
         if input_source in ("Enhanced (Gambas)", "Both"):
+            gambas_analyses = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
+            
             gambas_analyses.extend(get_latest(tool_analyses, ["gambas", "ResCNN"]))
-
+    
     try:
         if input_source == "Both":
             print(f"  [{sub_label} / {ses_label}] analyses found={len(analyses)} | MRR={len(mrr_analyses)} | Gambas={len(gambas_analyses)}")

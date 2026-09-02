@@ -891,7 +891,11 @@ def main():
                 st.info(f"Processing group: {group}")
                 df_group = df[df[stratify_col] == group]
                 group_str = str(group)
-
+                #Drop those that failed QC using the column QC_action if it exists
+                if "QC_action" in df_group.columns:
+                    df_group = df_group[df_group["QC_action"] != "drop"]
+                
+                st.info(f"Processing group {group_str} with {len(df_group)} rows")
                 processed, group_outliers_path, group_outliers = process_outliers(
                     df_group, df_demo, keywords, group_str
                 )
