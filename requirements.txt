@@ -3,7 +3,7 @@ pandas
 numpy
 PyYAML
 python-dotenv
-packaging==25.0
+# packaging==25.0
 tqdm
 pathvalidate
 pytz
@@ -27,7 +27,7 @@ scikit-image
 
 # Flywheel SDK
 flywheel
-flywheel-sdk==22.3.0
+flywheel-sdk==21.4.0
 fw-client==2.3.3
 
 # Jupyter/IPython
