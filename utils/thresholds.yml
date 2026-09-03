@@ -293,12 +293,83 @@ supersynth:
         - ss_Right-Basal-Forebrain
         - ss_Right-SeptalNuc
     
+recon-any:
+    label: Recon-Any
+    prefix: ""
+    inputs: ["MRR", "GAMBAS"]
+    thresholds: 
+        {"right-thalamus": 2.5,
+            "left-thalamus": 2.5,
+            "right-caudate": 2.5,
+            "left-caudate": 2.5,
+            "right-putamen": 2.5,
+            "left-putamen": 2.5,
+            "csf": 2.5,
+            "right-cortex": 2.5,
+            "left-cortex": 2.5,
+            "right-white-matter": 2.5,
+            "left-white-matter": 2.5,
+            "right-cerebellum-white-matter": 2.5,
+            "left-cerebellum-white-matter": 2.5,
+            "right-cerebellum-cortex": 2.5,
+            "left-cerebellum-cortex": 2.5}
 
-sc_lomina: 
-        label: SC-Lomina
-        prefix: sc
-        inputs: ["SF"]
-        thresholds: {
+    cov_thresholds: 
+            {"right-thalamus": 1.7,
+            "left-thalamus": 1.7,
+            "right-caudate": 1.7,
+            "left-caudate": 1.7,
+            "right-putamen": 1.7,
+            "left-putamen": 1.7,
+            "extracerebral-csf": 1.7,
+            "right-cortex": 1.7,
+            "left-cortex": 1.7,
+            "right-white-matter": 1.7,
+            "left-white-matter": 1.7,
+            "right-cerebellum-white-matter": 1.7,
+            "left-cerebellum-white-matter": 1.7,
+            "right-cerebellum-cortex": 1.5,
+            "left-cerebellum-cortex": 1.5}
+
+    volumetric_cols:
+            - brainstem
+            - extracerebral-csf
+            - fourth-ventricle
+            - left-accumbens
+            - left-amygdala
+            - left-caudate
+            - left-cerebellum-cortex
+            - left-cerebellum-white-matter
+            - left-cortex
+            - left-hippocampus
+            - left-lateral-ventricle
+            - left-pallidum
+            - left-putamen
+            - left-thalamus
+            - left-ventral-dc
+            - left-white-matter
+            - optic-chiasm
+            - right-accumbens
+            - right-amygdala
+            - right-caudate
+            - right-cerebellum-cortex
+            - right-cerebellum-white-matter
+            - right-cortex
+            - right-hippocampus
+            - right-lateral-ventricle
+            - right-pallidum
+            - right-putamen
+            - right-thalamus
+            - right-ventral-dc
+            - right-white-matter
+            - third-ventricle
+            - wm-lesion
+
+sc_lomina:
+    label: SC-Lomina
+    prefix: sc
+    inputs: ["SF"]
+    thresholds: {
                 "sc_left_thalamus": 2.5,
                 "sc_right_thalamus": 2.5,
                 "sc_right_caudate": 2.5,
@@ -310,31 +381,31 @@ sc_lomina:
                 "sc_white_matter": 2.5,
                 "sc_corpus_callosum": 2.5,
         }
-        cov_thresholds: {
-                "sc_left_thalamus": 1.7,
-                "sc_right_thalamus": 1.7,
-                "sc_right_caudate": 1.7,
-                "sc_left_caudate": 1.7,
-                "sc_right_lentiform": 1.7,
-                "sc_left_lentiform": 1.7,
-                "sc_csf": 1.7,
-                "sc_gray_matter": 1.7,
-                "sc_white_matter": 1.7,
-                "sc_corpus_callosum": 1.7,
-        }
-        volumetric_cols:
-            - sc_csf
-            - sc_gray_matter
-            - sc_white_matter
-            - sc_total_icv
-            - sc_left_caudate
-            - sc_right_caudate
-            - sc_left_lentiform
-            - sc_right_lentiform
-            - sc_left_hippocampus
-            - sc_right_hippocampus
-            - sc_left_thalamus
-            - sc_right_thalamus
-            - sc_corpus_callosum
-            - sc_gm_wm_ratio
+    cov_thresholds: {
+            "sc_left_thalamus": 1.7,
+            "sc_right_thalamus": 1.7,
+            "sc_right_caudate": 1.7,
+            "sc_left_caudate": 1.7,
+            "sc_right_lentiform": 1.7,
+            "sc_left_lentiform": 1.7,
+            "sc_csf": 1.7,
+            "sc_gray_matter": 1.7,
+            "sc_white_matter": 1.7,
+            "sc_corpus_callosum": 1.7,
+    }
+    volumetric_cols:
+        - sc_csf
+        - sc_gray_matter
+        - sc_white_matter
+        - sc_total_icv
+        - sc_left_caudate
+        - sc_right_caudate
+        - sc_left_lentiform
+        - sc_right_lentiform
+        - sc_left_hippocampus
+        - sc_right_hippocampus
+        - sc_left_thalamus
+        - sc_right_thalamus
+        - sc_corpus_callosum
+        - sc_gm_wm_ratio
         

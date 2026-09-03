@@ -78,7 +78,7 @@ if "authenticated" not in st.session_state:
 if "api_key" not in st.session_state:
     st.session_state.api_key = None
 
-API_KEY = os.getenv("FW_CLI_API_KEY")
+API_KEY = os.getenv("FW_API_KEY")
 
 if (API_KEY == None or API_KEY == "") and st.session_state.authenticated == False:
     

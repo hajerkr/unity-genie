@@ -4,3 +4,11 @@ duplicate_keys:
   - UniqueStudyID
   - MRI_fieldStrength
   - studyTimepoint
+
+demographic_merge_keys:
+  - CohortName
+  - project
+  - StudyID
+  - subject
+  - studyTimepoint
+  - session

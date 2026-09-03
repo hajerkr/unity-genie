@@ -43,6 +43,10 @@ INPUT_PREFIXES = ["GAMBAS", "MRR"]
 TOOL_PREFIX_MAP = {}
 CFG_DICT = {}
 CONFIG = {}
+project_col = ""
+subject_col = ""
+session_col = ""
+
 def covariance_difference(data):
     """
     Compute the difference between each point and the covariate prediction.
@@ -459,7 +463,7 @@ def outlier_detection(
 
         if not outliers.empty:
             outliers = pd.concat([outliers, outliers_grouped], ignore_index=True)
-            first_cols = ["CohortName", "StudyID", "studyTimepoint", "age_in_months"]
+            first_cols = [project_col, subject_col, session_col, "age_in_months"]
             if "input_gear_v" in df.columns:
                 first_cols.append("input_gear_v")
             other_cols = [col for col in outliers.columns if col not in first_cols]
@@ -475,8 +479,8 @@ def outlier_detection(
     #tag_only = outliers[["StudyID", "is_outlier"]].drop_duplicates()
     #df = df.copy().merge(tag_only, how="left", on="StudyID")
 
-    tag_only = outliers[["StudyID", "studyTimepoint", "is_outlier"]].drop_duplicates()
-    df = df.copy().merge(tag_only, how="left", on=["StudyID", "studyTimepoint"])
+    tag_only = outliers[[subject_col, session_col, "is_outlier"]].drop_duplicates()
+    df = df.copy().merge(tag_only, how="left", on=[subject_col, session_col])
     
     df["is_outlier"] = df["is_outlier"].fillna(0).astype(bool)
     
@@ -495,7 +499,7 @@ def outlier_detection(
 
 
 
-    first_cols = ["CohortName", "StudyID", "studyTimepoint", "is_outlier", "n_roi_outliers_zscore", "n_roi_outliers_cov"]
+    first_cols = [project_col, subject_col, session_col, "is_outlier", "n_roi_outliers_zscore", "n_roi_outliers_cov"]
     if "input_gear_v" in df.columns:
         first_cols.append("input_gear_v")
     other_cols = [col for col in outliers.columns if col not in first_cols]
@@ -627,6 +631,7 @@ def _detect_outliers_for_input(
     covariance_outlier_thresholds: dict,
     columns_to_keep_base: list,
 ):
+    print(base_volumetric_cols)
     available_vols = [c for c in base_volumetric_cols if c in df_filt.columns]
     available_thresholds = {
         k: v for k, v in outlier_thresholds.items() if k in df_filt.columns
@@ -652,7 +657,7 @@ def _detect_outliers_for_input(
     if df_sub.empty:
         return set(), set(), pd.DataFrame()
 
-    evaluated_sessions = set(zip(df_sub["StudyID"], df_sub["studyTimepoint"]))
+    evaluated_sessions = set(zip(df_sub[subject_col], df_sub[session_col]))
 
     _, outliers_df = outlier_detection(
         df_sub[columns_to_keep],
@@ -666,7 +671,7 @@ def _detect_outliers_for_input(
     if outliers_df.empty:
         return set(), evaluated_sessions, pd.DataFrame()
 
-    outlier_sessions = set(zip(outliers_df["StudyID"], outliers_df["studyTimepoint"]))
+    outlier_sessions = set(zip(outliers_df[subject_col], outliers_df[session_col]))
     #st.info(f"  → {len(outlier_sessions)} outlier sessions detected")
     return outlier_sessions, evaluated_sessions, outliers_df
 
@@ -692,19 +697,23 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
         st.warning("No additional demographic file uploaded. Missing ages will remain as NaN.")
         df_merged = df.copy()
         df_merged["age_from_demo"] = np.nan
-
+    print("Columns after merge:", df_merged.columns)
+    
     df_merged["childTimepointAge_months"] = df_merged["childTimepointAge_months"].combine_first(
-        df_merged.get("age_from_demo")
+        df_merged.get("childTimepointAge_months_from_demo")
     )
-    df_merged = df_merged.drop(columns=["age_from_demo"], errors="ignore")
+    df_merged = df_merged.drop(columns=["childTimepointAge_months_from_demo"], errors="ignore")
     df_merged["age_in_months"] = df_merged["childTimepointAge_months"].apply(
         lambda x: int(np.ceil(x)) if pd.notnull(x) else np.nan
     )
-
+    print("NaN age count after merge:", df_merged["age_in_months"].isna().sum() , "Total rows:", df_merged.shape[0])
     df_out = df_merged.copy()
+    
+    #Strip white space from column names
+    df_merged.columns = df_merged.columns.str.strip()
 
     columns_to_keep_base = [
-        "CohortName", "StudyID", "studyTimepoint", "age_in_months",
+        project_col, subject_col, session_col, "age_in_months",
         "childBiologicalSex", "MRR_acquisition", "GAMBAS_acquisition", "session_qc",
     ]
     columns_to_keep_base = [c for c in columns_to_keep_base if c in df_merged.columns]
@@ -722,8 +731,19 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
         outlier_thresholds = CFG_DICT[segmentation_tool]["thresholds"]
         covariance_outlier_thresholds = CFG_DICT[segmentation_tool]["cov_thresholds"]
         base_volumetric_cols = CFG_DICT[segmentation_tool]["volumetric_cols"]
-
-
+        
+        print("###NEW ", CFG_DICT[segmentation_tool]["volumetric_cols"], CFG_DICT[segmentation_tool]["cov_thresholds"], CFG_DICT[segmentation_tool]["thresholds"])
+        print(outlier_thresholds, covariance_outlier_thresholds, base_volumetric_cols)
+       
+        #Print to see if the columns are present in the dataframe
+        missing_cols = [col for col in base_volumetric_cols if col not in df_merged.columns]
+        if missing_cols:
+            print(missing_cols,base_volumetric_cols,  df_merged.columns)
+            st.warning(
+                f"{len(missing_cols)} volumetric columns missing for {segmentation_tool} "
+                f"(e.g. {missing_cols[0]}). Proceeding with {len(base_volumetric_cols) - len(missing_cols)} available columns."
+            )
+            #print(df_merged)
         outlier_sessions, evaluated_sessions, outliers_df = _detect_outliers_for_input(
             df_merged,
             base_volumetric_cols,
@@ -741,7 +761,7 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
             plot_df = outliers_df.copy()
             plot_df = plot_df[
                 plot_df.apply(
-                    lambda row: (row["StudyID"], row["studyTimepoint"]) in outlier_sessions,
+                    lambda row: (row[subject_col], row[session_col]) in outlier_sessions,
                     axis=1,
                 )
             ].copy()
@@ -758,7 +778,7 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
         session_set = tool_outlier_sessions.get(segmentation_tool, set())
 
         df_out[outlier_flag_col] = df_out.apply(
-            lambda row: (row["StudyID"], row["studyTimepoint"]) in session_set,
+            lambda row: (row[subject_col], row[session_col]) in session_set,
             axis=1,
         )
 
@@ -785,7 +805,7 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
 
 
 def main():
-    global TOOL_PREFIX_MAP, CFG_DICT, CONFIG, TOOL_INPUT_PREFIXES
+    global TOOL_PREFIX_MAP, CFG_DICT, CONFIG, TOOL_INPUT_PREFIXES, subject_col, session_col, project_col
  
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -805,11 +825,18 @@ def main():
 
     #stratify = st.checkbox("Stratify cleaning by project?", value=True)
     #Input box to enter column to stratify by (default "CohortName")
-    stratify_col = st.text_input("Enter column name to stratify by (default: 'project')", value="CohortName")
+    #stratify_col = st.text_input("Enter column name to stratify by (default: 'project')", value="CohortName")
     unique_groups = []
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
+        first_four_columns = df.columns[:4].tolist()
+        stratify_col = st.selectbox("Column to stratify input by: ", first_four_columns)
+        #Specify subject and session columns from dropdown
+        subject_col = st.selectbox("Column for subject ID: ", first_four_columns, index=1)
+        session_col = st.selectbox("Column for session ID: ", first_four_columns, index=2)
+        project_col = st.selectbox("Column for project ID: ", first_four_columns, index=0)
+        
         st.success("File uploaded successfully!")
         st.dataframe(df.head())
 
@@ -824,53 +851,48 @@ def main():
         else:
             st.info(f"Not stratifying cleaning by project. Projects found: {', '.join(map(str, unique_groups))}")
 
-    # segmentation_tool = st.radio(
-    #     "Upload derivatives from:",
-    #     ["recon-all-clinical", "minimorph", "supersynth", "all"],
-    # )
     #Check box instead of radio button
     st.text("Choose which segmentation tools to include in outlier detection (intersection across selected tools):")
-    
-    # recon_all_clinical = st.checkbox("Include recon-all-clinical (GAMBAS and MRR)", value=True)
-    # minimorph = st.checkbox("Include minimorph (MRR only)", value=True)
-    # supersynth = st.checkbox("Include supersynth (MRR only)", value=False)
-
-    # segmentation_tool = []
-    # if supersynth:
-    #     segmentation_tool.append("supersynth")
-    # if recon_all_clinical:
-    #     segmentation_tool.append("recon-all-clinical")
-    # if minimorph:
-    #     segmentation_tool.append("minimorph")
-
-    # keywords = []
-    # for tool in segmentation_tool:
-    #     if tool in TOOL_INPUT_PREFIXES:
-    #         keywords.append(tool)
 
     keywords = []
 
     for tool_name, cfg in CFG_DICT.items():
         label = cfg.get("label", tool_name)
         default = cfg.get("default_selected", False)
-
+        print(cfg["prefix"])
         if st.checkbox(label, value=default, key=f"{tool_name}"):
             keywords.append(tool_name)
+            
+        #Add checkbox to specify where volumetric cols start with a prefix or not
+        prefix_cols = st.checkbox(f"Volumetric columns start with prefix for {label}?", value=False, key=f"{tool_name}_prefix")
+        #If no was selected, then modify the volumetric cols read from the CFG_DICT to remove the prefix
+        if prefix_cols is False:
+            cfg["volumetric_cols"] = [col.replace(cfg["prefix"] + "_", "") for col in cfg["volumetric_cols"]]
+            cfg["cov_thresholds"] = {col.replace(cfg["prefix"] + "_", ""): val for col, val in cfg["cov_thresholds"].items()}
+            cfg["thresholds"] = {col.replace(cfg["prefix"] + "_", ""): val for col, val in cfg["thresholds"].items()}
+            
+            CFG_DICT[tool_name]["volumetric_cols"] = cfg["volumetric_cols"] 
+            print("###NEW ", CFG_DICT[tool_name]["volumetric_cols"], CFG_DICT[tool_name]["cov_thresholds"], CFG_DICT[tool_name]["thresholds"])
 
-    # if segmentation_tool == "all":
-    #     keywords = list(TOOL_INPUT_PREFIXES.keys())
-    # else:
-    #     keywords = [segmentation_tool]
-
+    #Cast the project subject and session columns as str
+    df[project_col] = df[project_col].astype(str)
+    df[subject_col] = df[subject_col].astype(str)
+    df[session_col] = df[session_col].astype(str)
+    
     uploaded_demo = st.file_uploader("Upload demographic CSV file (optional)", type=["csv"])
     df_demo = None
     final_outliers_path  = ""
     if uploaded_demo is not None:
         df_demo = pd.read_csv(uploaded_demo)
         st.success("Demographic file uploaded successfully!")
+        
+        df_demo[project_col] = df_demo[project_col].astype(str)
+        df_demo[subject_col] = df_demo[subject_col].astype(str)
+        df_demo[session_col] = df_demo[session_col].astype(str)
+    
         st.dataframe(df_demo.head())
 
-        required_columns = {"CohortName", "StudyID", "studyTimepoint", "childTimepointAge_months"}
+        required_columns = {project_col, subject_col, session_col, "childTimepointAge_months"}
         if not required_columns.issubset(df_demo.columns):
             st.error(
                 f"Demographic file must contain the following columns (name-sensitive): "
@@ -971,8 +993,8 @@ def main():
         clean_path = os.path.join(work_dir.parent, "data", "alldata_cleaned.csv")
         cols = clean_df.columns.tolist()
         front_cols = [
-            "CohortName", "StudyID", "studyTimepoint", "childTimepointAge_months",
-            "childBiologicalSex", "studyTimepoint", "session_qc", "MRR_acquisition","GAMBAS_acquisition",
+            project_col, subject_col,session_col, "childTimepointAge_months",
+            "childBiologicalSex", session_col, "session_qc", "MRR_acquisition","GAMBAS_acquisition",
         ]
         ra_cols = [col for col in cols if col.startswith("ra_")]
         mm_cols = [col for col in cols if col.startswith("mm_")]
