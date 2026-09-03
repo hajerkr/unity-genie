@@ -1,5 +1,13 @@
-# render.yaml
 services:
   - type: web
-    env: python
-    pythonVersion: "3.11"
+    name: unity-genie
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: render
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "streamlit run Home.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false"
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
