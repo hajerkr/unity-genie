@@ -838,6 +838,11 @@ def main():
         session_col = st.selectbox("Column for session ID: ", first_four_columns, index=2)
         project_col = st.selectbox("Column for project ID: ", first_four_columns, index=0)
         
+        #Cast the project subject and session columns as str
+        df[project_col] = df[project_col].astype(str)
+        df[subject_col] = df[subject_col].astype(str)
+        df[session_col] = df[session_col].astype(str)
+    
         st.success("File uploaded successfully!")
         st.dataframe(df.head())
 
@@ -875,10 +880,7 @@ def main():
             CFG_DICT[tool_name]["volumetric_cols"] = cfg["volumetric_cols"] 
             print("###NEW ", CFG_DICT[tool_name]["volumetric_cols"], CFG_DICT[tool_name]["cov_thresholds"], CFG_DICT[tool_name]["thresholds"])
 
-    #Cast the project subject and session columns as str
-    df[project_col] = df[project_col].astype(str)
-    df[subject_col] = df[subject_col].astype(str)
-    df[session_col] = df[session_col].astype(str)
+    
     
     uploaded_demo = st.file_uploader("Upload demographic CSV file (optional)", type=["csv"])
     df_demo = None
