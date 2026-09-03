@@ -1,0 +1,5 @@
+# render.yaml
+services:
+  - type: web
+    env: python
+    pythonVersion: "3.11"
