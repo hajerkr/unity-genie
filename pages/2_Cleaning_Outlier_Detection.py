@@ -633,7 +633,7 @@ def _detect_outliers_for_input(
     covariance_outlier_thresholds: dict,
     columns_to_keep_base: list,
 ):
-    print(base_volumetric_cols)
+    #print(base_volumetric_cols)
     available_vols = [c for c in base_volumetric_cols if c in df_filt.columns]
     available_thresholds = {
         k: v for k, v in outlier_thresholds.items() if k in df_filt.columns
@@ -695,15 +695,17 @@ def process_outliers(df, df_demo, keywords, group_str="all"):
             how="left",
             suffixes=("", "_from_demo"),
         )
+        
+        df_merged["childTimepointAge_months"] = df_merged["childTimepointAge_months"].combine_first(
+        df_merged.get("childTimepointAge_months_from_demo")
+        )
     else:
         st.warning("No additional demographic file uploaded. Missing ages will remain as NaN.")
         df_merged = df.copy()
         df_merged["age_from_demo"] = np.nan
     print("Columns after merge:", df_merged.columns)
     
-    df_merged["childTimepointAge_months"] = df_merged["childTimepointAge_months"].combine_first(
-        df_merged.get("childTimepointAge_months_from_demo")
-    )
+    
     df_merged = df_merged.drop(columns=["childTimepointAge_months_from_demo"], errors="ignore")
     df_merged["age_in_months"] = df_merged["childTimepointAge_months"].apply(
         lambda x: int(np.ceil(x)) if pd.notnull(x) else np.nan
