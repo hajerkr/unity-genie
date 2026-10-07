@@ -12,7 +12,10 @@ import yaml
 from packaging import version
 
 from utils.utils import get_session_data_dir
+import logging
 
+logging.basicConfig(level=logging.DEBUG, force=True)
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +54,7 @@ def _build_session_df(fw, project, session, analyses_list,
         analysis = analysis.reload()
         gear = analysis.gear_info.name
         volumetric_cols = tool_map.get(gear, [])
-
+        #print(gear, "vol columns", volumetric_cols)
         matched_files = [f for f in analysis.files if any(kw in f.name for kw in keywords)]
         print(f"    gear={gear}: {len(matched_files)} file(s) matched")
 
@@ -75,24 +78,36 @@ def _build_session_df(fw, project, session, analyses_list,
             df.insert(3, 'session_qc', session.tags[-1] if session.tags else 'n/a')
             df["age_source"] = "custom_info"
 
+            prefix = "RA" if gear == "recon-any" else "RAC" if gear == "recon-all-clinical" else "MM" if gear == "minimorph" else "SS" if gear == "supersynth" else None
+            df[f"analysis_id_{prefix}"] = analysis.id
+            df[f"gear_v_{gear}"] = analysis.gear_info.version
+            df.rename(columns={c: f"{prefix}_{c}" for c in volumetric_cols if c in df.columns}, inplace=True)
+            df.columns = df.columns.str.strip().str.replace(' ', '_').str.replace('-', '_').str.lower()
+            volumetric_cols_norm = [c.strip().replace(' ', '_').replace('-', '_').lower() for c in volumetric_cols]
+            #print(volumetric_cols_norm)
+            df.rename(columns={c: f"{prefix.upper()}-{c}" for c in volumetric_cols_norm if c in df.columns}, inplace=True)
+                
             # Prefix volumetric columns by gear (your requested casing style)
-            if gear == "minimorph":
-                df["analysis_id_mm"] = analysis.id
-                df["gear_v_minimorph"] = analysis.gear_info.version
-                df.rename(columns={c: f"MM_{c}" for c in volumetric_cols if c in df.columns}, inplace=True)
+            # if gear == "minimorph":
+            #     df["analysis_id_MM"] = analysis.id
+            #     df[f"gear_v_{gear}"] = analysis.gear_info.version
+            #     df.rename(columns={c: f"MM_{c}" for c in volumetric_cols if c in df.columns}, inplace=True)
 
-            elif gear == "supersynth":
-                df["analysis_id_ss"] = analysis.id
-                df["gear_v_supersynth"] = analysis.gear_info.version
-                df.rename(columns={c: f"ss_{c}" for c in volumetric_cols if c in df.columns}, inplace=True)
+            # elif gear == "supersynth":
+            #     df["analysis_id_SS"] = analysis.id
+            #     df[f"gear_v_{gear}"] = analysis.gear_info.version
+            #     df.rename(columns={c: f"SS_{c}" for c in volumetric_cols if c in df.columns}, inplace=True)
 
-            else:  # recon-all-clinical / recon-any
-                df["analysis_id_ra"] = analysis.id
-                df["gear_v_recon_all"] = analysis.gear_info.version
-                df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
-                volumetric_cols_norm = [c.replace(' ', '_').replace('-', '_').lower() for c in volumetric_cols]
-                df.rename(columns={c: f"RA_{c}" for c in volumetric_cols_norm if c in df.columns}, inplace=True)
-
+            # elif gear== 'recon-all-clinical' or gear =="recon-any":  # recon-all-clinical / recon-any
+            #     prefix = "RAC" if gear == "recon-all-clinical" else "RA"
+            #     print(prefix)
+            #     df[f"analysis_id_{prefix}"] = analysis.id
+            #     df[f"gear_v_{gear}"] = analysis.gear_info.version
+            #     df.columns = df.columns.str.strip().str.replace(' ', '_').str.replace('-', '_').str.lower()
+            #     volumetric_cols_norm = [c.strip().replace(' ', '_').replace('-', '_').lower() for c in volumetric_cols]
+            #     print(volumetric_cols_norm)
+            #     df.rename(columns={c: f"{prefix.upper()}-{c}" for c in volumetric_cols_norm if c in df.columns}, inplace=True)
+            #     print(df.columns)
             # Merge horizontally into session_df
             if session_df.empty:
                 session_df = df
@@ -145,6 +160,7 @@ def download_session_data(fw, project, session_id, project_path,
     gambas_analyses = []
 
     for segmentation_tool in segtool:
+        print(segmentation_tool)
         tool_analyses = [a for a in analyses if a.gear_info.name == segmentation_tool]
 
         if input_source in ("MRR", "Both"):
@@ -185,14 +201,14 @@ def _finalise_project_frames(frames, label_suffix, segtool, project, project_pat
 
     combined = pd.concat(frames, ignore_index=True)
 
-    for gear_col in ['gear_v_recon_all', 'gear_v_minimorph']:
+    for gear_col in ['gear_v_recon-any', 'gear_v_recon-all-clinical', 'gear_v_minimorph',"gear_v_supersynth"]:
         if gear_col in combined.columns:
             key_cols = [c for c in ['subject', 'session', 'acquisition'] if c in combined.columns]
             combined = (
                 combined
                 .sort_values(
                     gear_col,
-                    key=lambda s: s.map(lambda v: version.parse(v) if pd.notna(v) else version.parse("0")),
+                    key=lambda s: s.map(lambda v: version.parse(v.split('_')[0]) if pd.notna(v) else version.parse("0")),
                     ascending=False
                 )
                 .drop_duplicates(subset=key_cols, keep='first')
@@ -244,7 +260,8 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info, key
                 keywords, tool_map
             )
         except Exception:
-            st.error(f"Error processing session {session_id}: {traceback.format_exc()}")
+            #st.error(f"Error processing session {session_id}: {traceback.format_exc()}")
+            logger.exception(f"Error processing session {session_id}: {traceback.format_exc()}")
             continue
 
         if input_source == "Both":
@@ -287,12 +304,13 @@ def assemble_csv(derivative_paths, label=""):
     cols = combined.columns.tolist()
 
     ra_cols = [c for c in cols if c.startswith('RA_')]
+    rac_cols = [c for c in cols if c.startswith('RAC_')]
     mm_cols = [c for c in cols if c.startswith('MM_')]
     ss_cols = [c for c in cols if c.startswith('ss_')]
 
-    spoken_for = set(front_cols + ra_cols + mm_cols + ss_cols)
+    spoken_for = set(front_cols + ra_cols + rac_cols + mm_cols + ss_cols)
     other_cols = [c for c in cols if c not in spoken_for]
-    new_order = front_cols + ra_cols + mm_cols + ss_cols + other_cols
+    new_order = front_cols + ra_cols + rac_cols + mm_cols + ss_cols + other_cols
 
     for col in front_cols:
         if col not in combined.columns:
@@ -355,10 +373,22 @@ projects = get_projects()
 st.sidebar.header("Settings")
 project_ids = st.sidebar.multiselect("Select Projects", projects)
 
-minimorph = st.sidebar.checkbox("Minimorph", value=False)
-recon_all = st.sidebar.checkbox("Recon-all-clinical", value=False)
-supersynth = st.sidebar.checkbox("Supersynth", value=False)
-recon_any = st.sidebar.checkbox("Recon-any", value=False)
+#Select segmentation tool, each tool has a radio button
+st.session_state.segmentation_tool = st.sidebar.radio(
+    "Segmentation tool:",
+    ["Recon-all-clinical", "Recon-any", "Minimorph", "Supersynth"],
+    index=0
+)
+
+# minimorph = st.sidebar.checkbox("Minimorph", value=False)
+# recon_all = st.sidebar.checkbox("Recon-all-clinical", value=False)
+# supersynth = st.sidebar.checkbox("Supersynth", value=False)
+# recon_any = st.sidebar.checkbox("Recon-any", value=False)
+
+minimorph = st.session_state.segmentation_tool == "Minimorph"
+recon_all = st.session_state.segmentation_tool == "Recon-all-clinical"
+recon_any = st.session_state.segmentation_tool == "Recon-any"
+supersynth = st.session_state.segmentation_tool == "Supersynth"
 
 st.session_state.input_source = st.sidebar.radio(
     "Structural Image Segmented:",
@@ -375,9 +405,14 @@ st.session_state.fw_session_info = st.sidebar.radio(
 derivative_type = []
 keywords = []
 
-if recon_all:
-    derivative_type.append("recon-all-clinical")
-    st.sidebar.markdown("**Select outputs to download (Recon-all-clinical):**")
+if recon_all or recon_any:
+    #append recon_all or recon_any to derivative_type
+    if recon_all:
+        derivative_type.append("recon-all-clinical")
+    if recon_any:
+        derivative_type.append("recon-any")
+        
+    st.sidebar.markdown("**Select outputs to download:**")
     area = st.sidebar.checkbox("Area", value=False)
     thickness = st.sidebar.checkbox("Thickness", value=False)
     volume = st.sidebar.checkbox("Volume", value=True)
@@ -400,8 +435,8 @@ if supersynth:
     derivative_type.append("supersynth")
     keywords.append("volumes")
 
-if recon_any:
-    derivative_type.append("recon-any")
+# if recon_any:
+#     derivative_type.append("recon-any")
 
 debug = st.sidebar.checkbox("Debug mode (random up to 20 sessions, seed=42)", value=False)
 
@@ -423,7 +458,7 @@ if st.sidebar.button("Fetch derivatives"):
 
     for i, proj in enumerate(project_ids, 1):
         st.write(f"Fetching {', '.join(derivative_type)} for **{proj}** ...")
-
+        
         result = download_derivatives(
             project_id=proj,
             segtool=derivative_type,
