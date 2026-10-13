@@ -170,7 +170,7 @@ def download_session_data(fw, project, session_id, project_path,
         if input_source in ("Enhanced (Gambas)", "Both"):
             gambas_analyses = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
             
-            gambas_analyses.extend(get_latest(tool_analyses, ["gambas", "ResCNN"]))
+            gambas_analyses.extend(get_latest(tool_analyses, ["gambas", "ResCNN","GAMBAS"]))
     
     try:
         if input_source == "Both":
@@ -240,9 +240,19 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info, key
 
     sessions = [s.id for s in project.sessions() if not s.subject.label.startswith('137')]
     if debug:
+        
         sessions = np.random.RandomState(seed=42).choice(
             sessions, size=min(20, len(sessions)), replace=False
         )
+        #if running locally, use this block of code
+        logger.info("Debug mode enabled: selecting sessions for testing ...")
+        #read excel file from ./debugging, get the subject IDs
+        debug_file = Path(__file__).resolve().parent / "../debugging" / "akili_pids_missing_derivatives.csv"
+        debug_list = pd.read_csv(debug_file)["subject_label"].tolist()
+        #Get sessions for the subjects in the debug list
+        sessions = [s.id for s in project.sessions() if s.subject.label.strip() in debug_list]
+        print(debug_list)
+       
         sessions = list(sessions)
 
     progress_s = st.progress(0)
