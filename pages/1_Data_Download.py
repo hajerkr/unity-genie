@@ -164,13 +164,14 @@ def download_session_data(fw, project, session_id, project_path,
         tool_analyses = [a for a in analyses if a.gear_info.name == segmentation_tool]
 
         if input_source in ("MRR", "Both"):
-            mrr_analyses = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
-            mrr_analyses.extend(get_latest(tool_analyses, "mrr"))
+            asys = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
+            mrr_analyses.extend(get_latest(asys, "mrr"))
+            logger.info(f"Found {len(mrr_analyses)} MRR analyses for session {session_id} with tool {segmentation_tool}")
 
         if input_source in ("Enhanced (Gambas)", "Both"):
-            gambas_analyses = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
-            
-            gambas_analyses.extend(get_latest(tool_analyses, ["gambas", "ResCNN","GAMBAS"]))
+            asys = fw.analyses.find(f"parents.session={session_id},gear_info.name={segmentation_tool}")
+            gambas_analyses.extend(get_latest(asys, ["gambas", "ResCNN","GAMBAS"]))
+            logger.info(f"Found {len(gambas_analyses)} Gambas analyses for session {session_id} with tool {segmentation_tool}")
     
     try:
         if input_source == "Both":
@@ -251,7 +252,7 @@ def download_derivatives(project_id, segtool, input_source, fw_session_info, key
         debug_list = pd.read_csv(debug_file)["subject_label"].tolist()
         #Get sessions for the subjects in the debug list
         sessions = [s.id for s in project.sessions() if s.subject.label.strip() in debug_list]
-        print(debug_list)
+        #print(debug_list)
        
         sessions = list(sessions)
 
